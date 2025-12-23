@@ -1,0 +1,329 @@
+# SuperInsight 混合云架构配置
+
+# 混合云部署模式配置
+hybrid_deployment:
+  # 部署模式: local_primary, cloud_primary, balanced
+  mode: "local_primary"
+  
+  # 数据分布策略
+  data_distribution:
+    # 敏感数据保留在本地
+    sensitive_data_local: true
+    # 计算密集型任务使用云端
+    compute_intensive_cloud: true
+    # 存储策略: local, cloud, hybrid
+    storage_strategy: "hybrid"
+  
+  # 同步配置
+  sync:
+    enabled: true
+    interval: 300  # 5分钟
+    batch_size: 100
+    retry_attempts: 3
+    retry_delay: 60
+
+# 本地环境配置
+local_environment:
+  # 服务配置
+  services:
+    api:
+      enabled: true
+      replicas: 2
+      resources:
+        cpu: "1000m"
+        memory: "2Gi"
+    
+    database:
+      enabled: true
+      type: "postgresql"
+      version: "15"
+      storage: "100Gi"
+      backup_enabled: true
+    
+    label_studio:
+      enabled: true
+      replicas: 1
+      resources:
+        cpu: "500m"
+        memory: "1Gi"
+    
+    ai_worker:
+      enabled: true
+      replicas: 1
+      gpu_enabled: false
+      resources:
+        cpu: "2000m"
+        memory: "4Gi"
+  
+  # 网络配置
+  network:
+    internal_subnet: "10.0.0.0/16"
+    external_access: true
+    firewall_enabled: true
+    allowed_ports: [80, 443, 8000, 8080]
+  
+  # 安全配置
+  security:
+    encryption_at_rest: true
+    encryption_in_transit: true
+    access_control: "rbac"
+    audit_logging: true
+
+# 云端环境配置
+cloud_environment:
+  # 云服务提供商
+  provider: "tencent_cloud"  # aws, azure, gcp, tencent_cloud
+  
+  # 区域配置
+  region: "ap-shanghai"
+  availability_zones: ["ap-shanghai-1", "ap-shanghai-2"]
+  
+  # 服务配置
+  services:
+    # 云函数服务
+    functions:
+      ai_inference:
+        enabled: true
+        runtime: "python3.9"
+        memory: "2048MB"
+        timeout: "600s"
+        concurrent_executions: 100
+      
+      data_processing:
+        enabled: true
+        runtime: "python3.9"
+        memory: "1024MB"
+        timeout: "300s"
+        concurrent_executions: 50
+    
+    # 容器服务
+    containers:
+      api_gateway:
+        enabled: true
+        replicas: 2
+        auto_scaling:
+          min_replicas: 1
+          max_replicas: 10
+          cpu_threshold: 70
+      
+      model_serving:
+        enabled: true
+        replicas: 1
+        gpu_enabled: true
+        auto_scaling:
+          min_replicas: 1
+          max_replicas: 5
+          gpu_utilization_threshold: 80
+    
+    # 数据库服务
+    database:
+      type: "postgresql"
+      instance_class: "db.t3.medium"
+      storage: "500GB"
+      backup_retention: 7
+      multi_az: true
+    
+    # 对象存储
+    object_storage:
+      bucket_name: "superinsight-hybrid-data"
+      storage_class: "standard"
+      lifecycle_policy: true
+      encryption: "AES256"
+  
+  # 网络配置
+  network:
+    vpc_cidr: "172.16.0.0/16"
+    public_subnets: ["172.16.1.0/24", "172.16.2.0/24"]
+    private_subnets: ["172.16.10.0/24", "172.16.20.0/24"]
+    nat_gateway: true
+    vpn_connection: true
+
+# 数据同步配置
+data_sync:
+  # 同步规则
+  rules:
+    # 标注数据
+    annotations:
+      direction: "bidirectional"  # local_to_cloud, cloud_to_local, bidirectional
+      frequency: "real_time"      # real_time, scheduled, manual
+      encryption: true
+      compression: true
+    
+    # AI 模型
+    models:
+      direction: "cloud_to_local"
+      frequency: "scheduled"
+      schedule: "0 2 * * *"  # 每天凌晨2点
+      encryption: true
+    
+    # 质量报告
+    quality_reports:
+      direction: "local_to_cloud"
+      frequency: "scheduled"
+      schedule: "0 */6 * * *"  # 每6小时
+      encryption: true
+    
+    # 用户数据
+    user_data:
+      direction: "local_only"
+      encryption: true
+      backup_to_cloud: false
+  
+  # 冲突解决策略
+  conflict_resolution:
+    strategy: "timestamp_based"  # timestamp_based, manual, local_wins, cloud_wins
+    manual_review_threshold: 10  # 超过10个冲突需要人工审核
+
+# 安全配置
+security:
+  # 传输加密
+  encryption:
+    algorithm: "AES-256-GCM"
+    key_rotation_days: 90
+    certificate_authority: "internal"
+  
+  # 身份认证
+  authentication:
+    method: "mutual_tls"  # jwt, oauth2, mutual_tls
+    certificate_path: "/etc/ssl/certs/hybrid"
+    key_path: "/etc/ssl/private/hybrid"
+    ca_path: "/etc/ssl/ca/hybrid"
+  
+  # 访问控制
+  access_control:
+    ip_whitelist:
+      - "10.0.0.0/8"
+      - "172.16.0.0/12"
+      - "192.168.0.0/16"
+    
+    api_rate_limiting:
+      requests_per_minute: 1000
+      burst_size: 100
+    
+    data_classification:
+      sensitive_fields:
+        - "personal_info"
+        - "financial_data"
+        - "medical_records"
+      
+      access_levels:
+        - name: "public"
+          description: "公开数据"
+        - name: "internal"
+          description: "内部数据"
+        - name: "confidential"
+          description: "机密数据"
+        - name: "restricted"
+          description: "限制数据"
+
+# 监控配置
+monitoring:
+  # 指标收集
+  metrics:
+    enabled: true
+    collection_interval: 30
+    retention_days: 30
+    
+    # 关键指标
+    key_metrics:
+      - "sync_latency"
+      - "sync_success_rate"
+      - "data_transfer_volume"
+      - "error_rate"
+      - "resource_utilization"
+  
+  # 告警配置
+  alerts:
+    enabled: true
+    channels: ["email", "webhook"]
+    
+    rules:
+      - name: "sync_failure"
+        condition: "sync_success_rate < 95%"
+        severity: "critical"
+        notification_interval: 300
+      
+      - name: "high_latency"
+        condition: "sync_latency > 10s"
+        severity: "warning"
+        notification_interval: 600
+      
+      - name: "connection_failure"
+        condition: "connection_status == false"
+        severity: "critical"
+        notification_interval: 60
+  
+  # 日志配置
+  logging:
+    level: "INFO"
+    format: "json"
+    retention_days: 30
+    
+    # 审计日志
+    audit:
+      enabled: true
+      events:
+        - "data_sync"
+        - "user_access"
+        - "configuration_change"
+        - "security_event"
+
+# 灾难恢复配置
+disaster_recovery:
+  # 备份策略
+  backup:
+    enabled: true
+    frequency: "daily"
+    retention_days: 30
+    cross_region: true
+    encryption: true
+  
+  # 故障转移
+  failover:
+    enabled: true
+    automatic: true
+    rto: 300  # 恢复时间目标（秒）
+    rpo: 60   # 恢复点目标（秒）
+    
+    # 故障转移策略
+    strategies:
+      - trigger: "local_failure"
+        action: "switch_to_cloud"
+        rollback: "automatic"
+      
+      - trigger: "cloud_failure"
+        action: "local_only_mode"
+        rollback: "manual"
+      
+      - trigger: "network_partition"
+        action: "maintain_local_state"
+        rollback: "sync_on_recovery"
+
+# 性能优化配置
+performance:
+  # 缓存配置
+  caching:
+    enabled: true
+    ttl: 3600
+    max_size: "1GB"
+    eviction_policy: "lru"
+  
+  # 连接池配置
+  connection_pool:
+    max_connections: 100
+    min_connections: 10
+    connection_timeout: 30
+    idle_timeout: 300
+  
+  # 数据压缩
+  compression:
+    enabled: true
+    algorithm: "gzip"
+    level: 6
+  
+  # 批处理优化
+  batch_processing:
+    enabled: true
+    batch_size: 100
+    max_wait_time: 5
+    parallel_workers: 4

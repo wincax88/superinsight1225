@@ -1,0 +1,76 @@
+# SuperInsight Platform Dependencies
+
+# Core data validation and serialization
+pydantic>=1.10.0,<3.0.0
+pydantic-settings>=2.0.0
+
+# Database support
+psycopg2-binary>=2.9.0
+sqlalchemy>=2.0.0
+alembic>=1.12.0
+pymysql>=1.0.0
+cx-Oracle>=8.3.0
+
+# Web framework
+fastapi>=0.95.0
+uvicorn>=0.20.0
+
+# Environment configuration
+python-dotenv>=1.0.0
+
+# HTTP client for API integrations
+requests>=2.28.0
+httpx>=0.24.0
+aiohttp>=3.8.0
+
+# Redis for caching
+redis>=4.5.0
+
+# Label Studio SDK
+label-studio-sdk>=0.0.30
+
+# AI/ML libraries
+transformers>=4.30.0
+torch>=2.0.0
+ollama>=0.1.0
+
+# Chinese LLM API clients
+zhipuai>=1.0.0
+qianfan>=0.2.0
+
+# Quality assessment
+ragas>=0.1.0
+
+# File processing
+pypdf>=3.0.0
+python-docx>=0.8.11
+beautifulsoup4>=4.12.0
+lxml>=4.9.0
+
+# Security and encryption
+cryptography>=41.0.0
+PyJWT>=2.8.0
+passlib>=1.7.4
+bcrypt>=4.0.0
+
+# Async task queue
+celery>=5.3.0
+redis>=4.5.0
+
+# Logging and monitoring
+structlog>=23.1.0
+psutil>=5.9.0
+prometheus-client>=0.17.0
+
+# Testing
+pytest>=7.0.0
+pytest-cov>=4.0.0
+pytest-asyncio>=0.21.0
+hypothesis>=6.70.0
+factory-boy>=3.3.0
+
+# Development tools
+black>=22.0.0
+isort>=5.10.0
+mypy>=1.0.0
+pre-commit>=3.3.0

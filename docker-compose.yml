@@ -1,0 +1,106 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: superinsight-postgres
+    environment:
+      POSTGRES_DB: superinsight
+      POSTGRES_USER: superinsight
+      POSTGRES_PASSWORD: password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    networks:
+      - superinsight-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U superinsight -d superinsight"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: superinsight-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - superinsight-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Label Studio
+  label-studio:
+    image: heartexlabs/label-studio:latest
+    container_name: superinsight-label-studio
+    ports:
+      - "8080:8080"
+    environment:
+      DJANGO_DB: default
+      POSTGRE_NAME: superinsight
+      POSTGRE_USER: superinsight
+      POSTGRE_PASSWORD: password
+      POSTGRE_PORT: 5432
+      POSTGRE_HOST: postgres
+      LABEL_STUDIO_HOST: http://localhost:8080
+      LABEL_STUDIO_USERNAME: admin@superinsight.com
+      LABEL_STUDIO_PASSWORD: admin123
+    volumes:
+      - label_studio_data:/label-studio/data
+    networks:
+      - superinsight-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # SuperInsight API (for development)
+  superinsight-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: superinsight-api
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://superinsight:password@postgres:5432/superinsight
+      REDIS_URL: redis://redis:6379/0
+      LABEL_STUDIO_URL: http://label-studio:8080
+      DEBUG: "true"
+    volumes:
+      - .:/app
+      - uploads:/app/uploads
+    networks:
+      - superinsight-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      label-studio:
+        condition: service_healthy
+    command: ["python", "main.py"]
+
+volumes:
+  postgres_data:
+  redis_data:
+  label_studio_data:
+  uploads:
+
+networks:
+  superinsight-network:
+    driver: bridge

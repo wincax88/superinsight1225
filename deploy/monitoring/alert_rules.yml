@@ -1,0 +1,243 @@
+# Prometheus Alert Rules for SuperInsight Platform
+
+groups:
+  - name: superinsight_system_alerts
+    rules:
+      # System resource alerts
+      - alert: HighCPUUsage
+        expr: superinsight_system_cpu_usage_percent > 85
+        for: 5m
+        labels:
+          severity: warning
+          service: superinsight
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage is {{ $value }}% for more than 5 minutes"
+          
+      - alert: CriticalCPUUsage
+        expr: superinsight_system_cpu_usage_percent > 95
+        for: 2m
+        labels:
+          severity: critical
+          service: superinsight
+        annotations:
+          summary: "Critical CPU usage detected"
+          description: "CPU usage is {{ $value }}% for more than 2 minutes"
+          
+      - alert: HighMemoryUsage
+        expr: superinsight_system_memory_usage_percent > 85
+        for: 5m
+        labels:
+          severity: warning
+          service: superinsight
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is {{ $value }}% for more than 5 minutes"
+          
+      - alert: CriticalMemoryUsage
+        expr: superinsight_system_memory_usage_percent > 95
+        for: 2m
+        labels:
+          severity: critical
+          service: superinsight
+        annotations:
+          summary: "Critical memory usage detected"
+          description: "Memory usage is {{ $value }}% for more than 2 minutes"
+          
+      - alert: HighDiskUsage
+        expr: superinsight_system_disk_usage_percent > 85
+        for: 10m
+        labels:
+          severity: warning
+          service: superinsight
+        annotations:
+          summary: "High disk usage detected"
+          description: "Disk usage is {{ $value }}% for more than 10 minutes"
+          
+      - alert: CriticalDiskUsage
+        expr: superinsight_system_disk_usage_percent > 95
+        for: 5m
+        labels:
+          severity: critical
+          service: superinsight
+        annotations:
+          summary: "Critical disk usage detected"
+          description: "Disk usage is {{ $value }}% for more than 5 minutes"
+
+  - name: superinsight_application_alerts
+    rules:
+      # HTTP request alerts
+      - alert: HighErrorRate
+        expr: rate(superinsight_http_requests_total{status=~"5.."}[5m]) / rate(superinsight_http_requests_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: superinsight
+        annotations:
+          summary: "High HTTP error rate detected"
+          description: "HTTP error rate is {{ $value | humanizePercentage }} for more than 5 minutes"
+          
+      - alert: CriticalErrorRate
+        expr: rate(superinsight_http_requests_total{status=~"5.."}[5m]) / rate(superinsight_http_requests_total[5m]) > 0.25
+        for: 2m
+        labels:
+          severity: critical
+          service: superinsight
+        annotations:
+          summary: "Critical HTTP error rate detected"
+          description: "HTTP error rate is {{ $value | humanizePercentage }} for more than 2 minutes"
+          
+      - alert: SlowResponseTime
+        expr: histogram_quantile(0.95, rate(superinsight_http_request_duration_seconds_bucket[5m])) > 5
+        for: 5m
+        labels:
+          severity: warning
+          service: superinsight
+        annotations:
+          summary: "Slow HTTP response time detected"
+          description: "95th percentile response time is {{ $value }}s for more than 5 minutes"
+          
+      # Database alerts
+      - alert: DatabaseQueryErrors
+        expr: rate(superinsight_database_queries_total{success="false"}[5m]) > 0.1
+        for: 3m
+        labels:
+          severity: warning
+          service: superinsight
+        annotations:
+          summary: "Database query errors detected"
+          description: "Database error rate is {{ $value }} queries/second for more than 3 minutes"
+          
+      - alert: SlowDatabaseQueries
+        expr: histogram_quantile(0.95, rate(superinsight_database_query_duration_seconds_bucket[5m])) > 10
+        for: 5m
+        labels:
+          severity: warning
+          service: superinsight
+        annotations:
+          summary: "Slow database queries detected"
+          description: "95th percentile query time is {{ $value }}s for more than 5 minutes"
+
+  - name: superinsight_business_alerts
+    rules:
+      # Annotation efficiency alerts
+      - alert: LowAnnotationEfficiency
+        expr: superinsight_annotation_efficiency_per_hour < 10
+        for: 15m
+        labels:
+          severity: warning
+          service: superinsight
+        annotations:
+          summary: "Low annotation efficiency detected"
+          description: "Annotation efficiency is {{ $value }} per hour for more than 15 minutes"
+          
+      - alert: LowAnnotationQuality
+        expr: superinsight_annotation_quality_score < 0.7
+        for: 10m
+        labels:
+          severity: warning
+          service: superinsight
+        annotations:
+          summary: "Low annotation quality detected"
+          description: "Average annotation quality score is {{ $value }} for more than 10 minutes"
+          
+      # User activity alerts
+      - alert: NoActiveUsers
+        expr: superinsight_active_users_count == 0
+        for: 30m
+        labels:
+          severity: warning
+          service: superinsight
+        annotations:
+          summary: "No active users detected"
+          description: "No active users for more than 30 minutes during business hours"
+          
+      # AI model alerts
+      - alert: AIModelErrors
+        expr: rate(superinsight_ai_inferences_total{success="false"}[10m]) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+          service: superinsight
+        annotations:
+          summary: "AI model errors detected"
+          description: "AI model error rate is {{ $value }} inferences/second for model {{ $labels.model }}"
+          
+      - alert: SlowAIInference
+        expr: histogram_quantile(0.95, rate(superinsight_ai_inference_duration_seconds_bucket[5m])) > 30
+        for: 5m
+        labels:
+          severity: warning
+          service: superinsight
+        annotations:
+          summary: "Slow AI inference detected"
+          description: "95th percentile AI inference time is {{ $value }}s for model {{ $labels.model }}"
+          
+      - alert: LowAIConfidence
+        expr: superinsight_ai_confidence_score < 0.5
+        for: 10m
+        labels:
+          severity: warning
+          service: superinsight
+        annotations:
+          summary: "Low AI confidence detected"
+          description: "Average AI confidence score is {{ $value }} for model {{ $labels.model }}"
+
+  - name: superinsight_project_alerts
+    rules:
+      # Project progress alerts
+      - alert: ProjectBehindSchedule
+        expr: superinsight_project_completion_percentage < 50 and time() > (project_start_time + project_duration * 0.75)
+        for: 1h
+        labels:
+          severity: warning
+          service: superinsight
+        annotations:
+          summary: "Project behind schedule"
+          description: "Project {{ $labels.project_id }} is {{ $value }}% complete but should be further along"
+
+  - name: superinsight_quality_alerts
+    rules:
+      # Quality issue alerts
+      - alert: HighQualityIssues
+        expr: rate(superinsight_quality_issues_total{severity="high"}[1h]) > 5
+        for: 10m
+        labels:
+          severity: warning
+          service: superinsight
+        annotations:
+          summary: "High number of quality issues"
+          description: "High severity quality issues are being created at {{ $value }} per hour"
+          
+      - alert: CriticalQualityIssues
+        expr: rate(superinsight_quality_issues_total{severity="critical"}[1h]) > 1
+        for: 5m
+        labels:
+          severity: critical
+          service: superinsight
+        annotations:
+          summary: "Critical quality issues detected"
+          description: "Critical quality issues are being created at {{ $value }} per hour"
+
+  - name: superinsight_service_alerts
+    rules:
+      # Service availability alerts
+      - alert: ServiceDown
+        expr: up{job="superinsight-platform"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: superinsight
+        annotations:
+          summary: "SuperInsight service is down"
+          description: "SuperInsight platform service has been down for more than 1 minute"
+          
+      - alert: DatabaseDown
+        expr: up{job="postgres-exporter"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: superinsight
+        annotations:
+          summary: "Database service is down"
+          description: "PostgreSQL database has been down for more than 2 minutes"

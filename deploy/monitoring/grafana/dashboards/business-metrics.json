@@ -1,0 +1,279 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "SuperInsight Business Metrics",
+    "tags": ["superinsight", "business", "analytics"],
+    "style": "dark",
+    "timezone": "browser",
+    "refresh": "1m",
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Key Performance Indicators",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "superinsight_annotation_efficiency_per_hour",
+            "legendFormat": "Annotations/Hour"
+          },
+          {
+            "expr": "superinsight_annotation_quality_score",
+            "legendFormat": "Quality Score"
+          },
+          {
+            "expr": "superinsight_active_users_count",
+            "legendFormat": "Active Users"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": null},
+                {"color": "yellow", "value": 0.5},
+                {"color": "green", "value": 0.8}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 6, "w": 24, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "Annotation Efficiency Trend",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "superinsight_annotation_efficiency_per_hour",
+            "legendFormat": "Annotations per Hour"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Annotations/Hour",
+            "min": 0
+          }
+        ],
+        "alert": {
+          "conditions": [
+            {
+              "evaluator": {
+                "params": [10],
+                "type": "lt"
+              },
+              "operator": {
+                "type": "and"
+              },
+              "query": {
+                "params": ["A", "5m", "now"]
+              },
+              "reducer": {
+                "params": [],
+                "type": "avg"
+              },
+              "type": "query"
+            }
+          ],
+          "executionErrorState": "alerting",
+          "for": "5m",
+          "frequency": "10s",
+          "handler": 1,
+          "name": "Low Annotation Efficiency",
+          "noDataState": "no_data",
+          "notifications": []
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 6}
+      },
+      {
+        "id": 3,
+        "title": "Quality Score Trend",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "superinsight_annotation_quality_score",
+            "legendFormat": "Quality Score"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Score",
+            "min": 0,
+            "max": 1
+          }
+        ],
+        "thresholds": [
+          {
+            "value": 0.7,
+            "colorMode": "critical",
+            "op": "lt"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 6}
+      },
+      {
+        "id": 4,
+        "title": "User Activity",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "superinsight_active_users_count",
+            "legendFormat": "Active Users"
+          },
+          {
+            "expr": "rate(superinsight_user_sessions_total[1h])",
+            "legendFormat": "New Sessions/Hour"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Count",
+            "min": 0
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 14}
+      },
+      {
+        "id": 5,
+        "title": "AI Model Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(superinsight_ai_inferences_total[5m])",
+            "legendFormat": "{{model}} - {{success}}"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Inferences/sec",
+            "min": 0
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 14}
+      },
+      {
+        "id": 6,
+        "title": "AI Model Success Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(superinsight_ai_inferences_total{success=\"true\"}[5m]) / rate(superinsight_ai_inferences_total[5m])",
+            "legendFormat": "{{model}} success rate"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Success Rate",
+            "min": 0,
+            "max": 1
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 22}
+      },
+      {
+        "id": 7,
+        "title": "AI Inference Response Time",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(superinsight_ai_inference_duration_seconds_bucket[5m]))",
+            "legendFormat": "{{model}} 95th percentile"
+          },
+          {
+            "expr": "histogram_quantile(0.50, rate(superinsight_ai_inference_duration_seconds_bucket[5m]))",
+            "legendFormat": "{{model}} median"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Seconds",
+            "min": 0
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 22}
+      },
+      {
+        "id": 8,
+        "title": "Project Progress",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "superinsight_project_completion_percentage",
+            "legendFormat": "{{project_id}}"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Completion %",
+            "min": 0,
+            "max": 100
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 30}
+      },
+      {
+        "id": 9,
+        "title": "Quality Issues",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(superinsight_quality_issues_total[1h])",
+            "legendFormat": "{{severity}} issues/hour"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Issues/Hour",
+            "min": 0
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 30}
+      },
+      {
+        "id": 10,
+        "title": "Billing Metrics",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(superinsight_billing_cost_total[1h])",
+            "legendFormat": "{{tenant_id}} cost/hour"
+          },
+          {
+            "expr": "rate(superinsight_billing_annotations_total[1h])",
+            "legendFormat": "{{tenant_id}} annotations/hour"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Rate/Hour",
+            "min": 0
+          }
+        ],
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 38}
+      }
+    ],
+    "templating": {
+      "list": [
+        {
+          "name": "project",
+          "type": "query",
+          "query": "label_values(superinsight_project_completion_percentage, project_id)",
+          "refresh": 1,
+          "includeAll": true,
+          "multi": true
+        },
+        {
+          "name": "model",
+          "type": "query",
+          "query": "label_values(superinsight_ai_inferences_total, model)",
+          "refresh": 1,
+          "includeAll": true,
+          "multi": true
+        }
+      ]
+    }
+  }
+}
