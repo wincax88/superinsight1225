@@ -34,8 +34,8 @@ SuperInsight 是一款专为 AI 时代设计的企业级语料治理与智能标
 
 1. **克隆项目**
 ```bash
-git clone <repository-url>
-cd superinsight-platform
+git clone https://github.com/Angus1976/superinsight1225.git
+cd superinsight1225
 ```
 
 2. **安装依赖**
