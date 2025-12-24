@@ -1,0 +1,35 @@
+{
+  "title": "Dashboard",
+  "welcome": "Welcome back, {{name}}",
+  "metrics": {
+    "activeTasks": "Active Tasks",
+    "todayAnnotations": "Today's Annotations",
+    "totalCorpus": "Total Corpus",
+    "totalBilling": "Total Billing",
+    "qualityScore": "Quality Score",
+    "completionRate": "Completion Rate"
+  },
+  "charts": {
+    "annotationTrend": "Annotation Trend",
+    "qualityDistribution": "Quality Distribution",
+    "userActivity": "User Activity",
+    "projectProgress": "Project Progress"
+  },
+  "quickActions": {
+    "title": "Quick Actions",
+    "createTask": "Create Task",
+    "viewBilling": "View Billing",
+    "manageData": "Manage Data",
+    "settings": "Settings"
+  },
+  "trends": {
+    "increasing": "Increasing",
+    "decreasing": "Decreasing",
+    "stable": "Stable"
+  },
+  "period": {
+    "last24h": "Last 24 Hours",
+    "last7d": "Last 7 Days",
+    "last30d": "Last 30 Days"
+  }
+}

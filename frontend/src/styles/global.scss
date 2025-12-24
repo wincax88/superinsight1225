@@ -1,0 +1,101 @@
+// Global styles
+@use './variables' as *;
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: $font-size-base;
+  line-height: 1.5715;
+  color: $text-primary;
+  background-color: $bg-base;
+}
+
+#root {
+  height: 100%;
+}
+
+// Scrollbar styles
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+
+// Link styles
+a {
+  color: $primary-color;
+  text-decoration: none;
+
+  &:hover {
+    color: lighten($primary-color, 10%);
+  }
+}
+
+// Utility classes
+.text-center {
+  text-align: center;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.mb-sm {
+  margin-bottom: $spacing-sm;
+}
+
+.mb-md {
+  margin-bottom: $spacing-md;
+}
+
+.mb-lg {
+  margin-bottom: $spacing-lg;
+}
+
+.mt-md {
+  margin-top: $spacing-md;
+}
+
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.full-height {
+  height: 100%;
+}
+
+// Animation
+.fade-enter {
+  opacity: 0;
+}
+
+.fade-enter-active {
+  opacity: 1;
+  transition: opacity 200ms ease-in;
+}
+
+.fade-exit {
+  opacity: 1;
+}
+
+.fade-exit-active {
+  opacity: 0;
+  transition: opacity 200ms ease-out;
+}

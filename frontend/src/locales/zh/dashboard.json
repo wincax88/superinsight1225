@@ -1,0 +1,35 @@
+{
+  "title": "仪表盘",
+  "welcome": "欢迎回来，{{name}}",
+  "metrics": {
+    "activeTasks": "活跃任务",
+    "todayAnnotations": "今日标注",
+    "totalCorpus": "语料总数",
+    "totalBilling": "账单总额",
+    "qualityScore": "质量评分",
+    "completionRate": "完成率"
+  },
+  "charts": {
+    "annotationTrend": "标注趋势",
+    "qualityDistribution": "质量分布",
+    "userActivity": "用户活跃度",
+    "projectProgress": "项目进度"
+  },
+  "quickActions": {
+    "title": "快捷操作",
+    "createTask": "创建任务",
+    "viewBilling": "查看账单",
+    "manageData": "数据管理",
+    "settings": "系统设置"
+  },
+  "trends": {
+    "increasing": "上升",
+    "decreasing": "下降",
+    "stable": "稳定"
+  },
+  "period": {
+    "last24h": "最近24小时",
+    "last7d": "最近7天",
+    "last30d": "最近30天"
+  }
+}
