@@ -456,6 +456,44 @@ class LabelStudioIntegration:
             logger.error(f"Error syncing annotations to database: {str(e)}")
             raise
     
+    async def test_connection(self, timeout: float = 10.0) -> bool:
+        """
+        Test Label Studio API connectivity.
+
+        Args:
+            timeout: Connection timeout in seconds
+
+        Returns:
+            bool: True if connection is successful, False otherwise
+        """
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                # Try to access the API health endpoint or user info
+                response = await client.get(
+                    f"{self.base_url}/api/current-user/whoami/",
+                    headers=self.headers
+                )
+
+                if response.status_code == 200:
+                    logger.info("Label Studio connection test successful")
+                    return True
+                elif response.status_code == 401:
+                    logger.warning("Label Studio authentication failed")
+                    return False
+                else:
+                    logger.warning(f"Label Studio returned status code: {response.status_code}")
+                    return False
+
+        except httpx.TimeoutException:
+            logger.error("Label Studio connection timed out")
+            return False
+        except httpx.RequestError as e:
+            logger.error(f"Label Studio connection error: {str(e)}")
+            return False
+        except Exception as e:
+            logger.error(f"Unexpected error testing Label Studio connection: {str(e)}")
+            return False
+
     async def get_project_info(self, project_id: str) -> Optional[LabelStudioProject]:
         """Get project information from Label Studio"""
         try:

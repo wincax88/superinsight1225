@@ -529,3 +529,90 @@ class SecurityController:
         except Exception:
             db.rollback()
             return False
+
+    # Health Check Methods
+
+    def test_encryption(self) -> bool:
+        """
+        Test password hashing functionality for health check.
+
+        Returns:
+            bool: True if encryption is working correctly
+        """
+        try:
+            test_password = "health_check_test_password_123"
+            hashed = self.hash_password(test_password)
+
+            # Verify the hash is not empty and is different from the original
+            if not hashed or hashed == test_password:
+                return False
+
+            # Verify we can verify the password correctly
+            if not self.verify_password(test_password, hashed):
+                return False
+
+            # Verify wrong password fails
+            if self.verify_password("wrong_password", hashed):
+                return False
+
+            return True
+        except Exception:
+            return False
+
+    def test_authentication(self) -> bool:
+        """
+        Test JWT token generation and validation for health check.
+
+        Returns:
+            bool: True if authentication system is working correctly
+        """
+        try:
+            test_user_id = "health_check_user"
+            test_tenant_id = "health_check_tenant"
+
+            # Test token generation
+            token = self.create_access_token(test_user_id, test_tenant_id)
+            if not token:
+                return False
+
+            # Test token verification
+            payload = self.verify_token(token)
+            if not payload:
+                return False
+
+            # Verify payload contents
+            if payload.get("user_id") != test_user_id:
+                return False
+            if payload.get("tenant_id") != test_tenant_id:
+                return False
+
+            return True
+        except Exception:
+            return False
+
+    def test_audit_logging(self) -> bool:
+        """
+        Test audit logging capability for health check.
+
+        This is a lightweight check that doesn't actually write to the database,
+        but verifies that the audit logging infrastructure is properly configured.
+
+        Returns:
+            bool: True if audit logging is available
+        """
+        try:
+            # Verify AuditAction enum is available
+            if not hasattr(AuditAction, 'LOGIN'):
+                return False
+
+            # Verify AuditLogModel is available
+            if not AuditLogModel:
+                return False
+
+            # Verify the log_user_action method exists and is callable
+            if not callable(getattr(self, 'log_user_action', None)):
+                return False
+
+            return True
+        except Exception:
+            return False

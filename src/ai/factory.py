@@ -245,9 +245,100 @@ class ConfidenceScorer:
             return confidence
 
 
+class AIAnnotatorFactory:
+    """
+    Alias for AnnotatorFactory with additional health check capabilities.
+
+    Provides a simpler interface for health checks and service availability testing.
+    """
+
+    # Service name to ModelType mapping
+    _service_mapping: Dict[str, ModelType] = {
+        "ollama": ModelType.OLLAMA,
+        "huggingface": ModelType.HUGGINGFACE,
+        "zhipu": ModelType.ZHIPU_GLM,
+        "baidu": ModelType.BAIDU_WENXIN,
+        "alibaba": ModelType.ALIBABA_TONGYI,
+        "tencent": ModelType.TENCENT_HUNYUAN,
+    }
+
+    @classmethod
+    def create_annotator(cls, service_name: str) -> Optional[AIAnnotator]:
+        """
+        Create an annotator by service name for health checking.
+
+        Args:
+            service_name: Name of the service (ollama, huggingface, zhipu, baidu, etc.)
+
+        Returns:
+            AI annotator instance or None if service is not available
+        """
+        model_type = cls._service_mapping.get(service_name.lower())
+        if not model_type:
+            return None
+
+        try:
+            # Create a minimal config for health checking
+            config = ModelConfig(
+                model_type=model_type,
+                model_name=f"{service_name}_health_check",
+                api_key="",  # Will be loaded from settings
+                base_url=""  # Will use default
+            )
+            return AnnotatorFactory.create_annotator(config)
+        except Exception:
+            return None
+
+    @classmethod
+    def get_supported_services(cls) -> List[str]:
+        """Get list of supported service names."""
+        return list(cls._service_mapping.keys())
+
+    @classmethod
+    async def check_service_health(cls, service_name: str) -> Dict[str, Any]:
+        """
+        Check health of a specific AI service.
+
+        Args:
+            service_name: Name of the service to check
+
+        Returns:
+            Dictionary with health status and details
+        """
+        try:
+            annotator = cls.create_annotator(service_name)
+            if not annotator:
+                return {
+                    "service": service_name,
+                    "available": False,
+                    "error": "Service not supported"
+                }
+
+            # Check if annotator has health check method
+            if hasattr(annotator, 'check_model_availability'):
+                is_available = await annotator.check_model_availability()
+            elif hasattr(annotator, 'test_connection'):
+                is_available = await annotator.test_connection()
+            else:
+                # Assume available if no check method
+                is_available = True
+
+            return {
+                "service": service_name,
+                "available": is_available,
+                "model_type": str(cls._service_mapping.get(service_name.lower()))
+            }
+        except Exception as e:
+            return {
+                "service": service_name,
+                "available": False,
+                "error": str(e)
+            }
+
+
 class ModelManager:
     """Manager class for handling multiple AI models and their configurations."""
-    
+
     def __init__(self):
         """Initialize the model manager."""
         self.annotators: Dict[str, AIAnnotator] = {}

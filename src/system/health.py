@@ -50,14 +50,45 @@ class HealthCheckResult:
 class HealthChecker:
     """
     Comprehensive health checking system.
-    
+
     Performs health checks on all system components and provides
     detailed status information.
     """
-    
+
     def __init__(self):
         self.checks: Dict[str, Callable] = {}
-        self.check_timeout = 30  # seconds
+        self._load_config()
+
+    def _load_config(self):
+        """Load health check configuration from settings."""
+        try:
+            self.check_timeout = settings.health_check.health_check_timeout
+            self.retry_attempts = settings.health_check.health_check_retry_attempts
+            self.retry_delay = settings.health_check.health_check_retry_delay
+            self.enabled = settings.health_check.health_check_enabled
+
+            # Individual check toggles
+            self.check_toggles = {
+                "database": settings.health_check.database_check_enabled,
+                "label_studio": settings.health_check.label_studio_check_enabled,
+                "ai_services": settings.health_check.ai_services_check_enabled,
+                "storage": settings.health_check.storage_check_enabled,
+                "security": settings.health_check.security_check_enabled,
+                "external_dependencies": settings.health_check.external_deps_check_enabled,
+            }
+        except AttributeError:
+            # Fallback to defaults if settings not available
+            self.check_timeout = 30
+            self.retry_attempts = 3
+            self.retry_delay = 1.0
+            self.enabled = True
+            self.check_toggles = {}
+
+    def is_check_enabled(self, name: str) -> bool:
+        """Check if a specific health check is enabled."""
+        if not self.enabled:
+            return False
+        return self.check_toggles.get(name, True)
         
     def register_check(self, name: str, check_func: Callable):
         """Register a health check function."""
@@ -65,7 +96,7 @@ class HealthChecker:
         logger.info(f"Registered health check: {name}")
     
     async def run_check(self, name: str) -> HealthCheckResult:
-        """Run a specific health check."""
+        """Run a specific health check with retry support."""
         if name not in self.checks:
             return HealthCheckResult(
                 name=name,
@@ -74,68 +105,83 @@ class HealthChecker:
                 duration_ms=0,
                 timestamp=time.time()
             )
-        
+
+        # Check if this health check is enabled
+        if not self.is_check_enabled(name):
+            return HealthCheckResult(
+                name=name,
+                status=HealthStatus.HEALTHY,
+                message=f"Health check '{name}' is disabled",
+                duration_ms=0,
+                timestamp=time.time(),
+                details={"disabled": True}
+            )
+
         start_time = time.time()
-        
-        try:
-            check_func = self.checks[name]
-            
-            # Run with timeout
-            if asyncio.iscoroutinefunction(check_func):
-                result = await asyncio.wait_for(check_func(), timeout=self.check_timeout)
-            else:
-                result = await asyncio.wait_for(
-                    asyncio.get_event_loop().run_in_executor(None, check_func),
-                    timeout=self.check_timeout
-                )
-            
-            duration_ms = (time.time() - start_time) * 1000
-            
-            # Parse result
-            if isinstance(result, dict):
-                return HealthCheckResult(
-                    name=name,
-                    status=HealthStatus(result.get("status", "unknown")),
-                    message=result.get("message", "OK"),
-                    duration_ms=duration_ms,
-                    timestamp=time.time(),
-                    details=result.get("details")
-                )
-            elif isinstance(result, bool):
-                return HealthCheckResult(
-                    name=name,
-                    status=HealthStatus.HEALTHY if result else HealthStatus.UNHEALTHY,
-                    message="OK" if result else "Check failed",
-                    duration_ms=duration_ms,
-                    timestamp=time.time()
-                )
-            else:
-                return HealthCheckResult(
-                    name=name,
-                    status=HealthStatus.HEALTHY,
-                    message=str(result),
-                    duration_ms=duration_ms,
-                    timestamp=time.time()
-                )
-                
-        except asyncio.TimeoutError:
-            duration_ms = (time.time() - start_time) * 1000
-            return HealthCheckResult(
-                name=name,
-                status=HealthStatus.UNHEALTHY,
-                message=f"Health check timed out after {self.check_timeout}s",
-                duration_ms=duration_ms,
-                timestamp=time.time()
-            )
-        except Exception as e:
-            duration_ms = (time.time() - start_time) * 1000
-            return HealthCheckResult(
-                name=name,
-                status=HealthStatus.UNHEALTHY,
-                message=f"Health check failed: {str(e)}",
-                duration_ms=duration_ms,
-                timestamp=time.time()
-            )
+        last_error = None
+
+        # Retry logic
+        for attempt in range(self.retry_attempts):
+            try:
+                check_func = self.checks[name]
+
+                # Run with timeout
+                if asyncio.iscoroutinefunction(check_func):
+                    result = await asyncio.wait_for(check_func(), timeout=self.check_timeout)
+                else:
+                    result = await asyncio.wait_for(
+                        asyncio.get_event_loop().run_in_executor(None, check_func),
+                        timeout=self.check_timeout
+                    )
+
+                duration_ms = (time.time() - start_time) * 1000
+
+                # Parse result
+                if isinstance(result, dict):
+                    return HealthCheckResult(
+                        name=name,
+                        status=HealthStatus(result.get("status", "unknown")),
+                        message=result.get("message", "OK"),
+                        duration_ms=duration_ms,
+                        timestamp=time.time(),
+                        details=result.get("details")
+                    )
+                elif isinstance(result, bool):
+                    return HealthCheckResult(
+                        name=name,
+                        status=HealthStatus.HEALTHY if result else HealthStatus.UNHEALTHY,
+                        message="OK" if result else "Check failed",
+                        duration_ms=duration_ms,
+                        timestamp=time.time()
+                    )
+                else:
+                    return HealthCheckResult(
+                        name=name,
+                        status=HealthStatus.HEALTHY,
+                        message=str(result),
+                        duration_ms=duration_ms,
+                        timestamp=time.time()
+                    )
+
+            except asyncio.TimeoutError:
+                last_error = f"Health check timed out after {self.check_timeout}s"
+            except Exception as e:
+                last_error = f"Health check failed: {str(e)}"
+
+            # Wait before retry (except on last attempt)
+            if attempt < self.retry_attempts - 1:
+                await asyncio.sleep(self.retry_delay)
+
+        # All retries failed
+        duration_ms = (time.time() - start_time) * 1000
+        return HealthCheckResult(
+            name=name,
+            status=HealthStatus.UNHEALTHY,
+            message=last_error or "Health check failed after retries",
+            duration_ms=duration_ms,
+            timestamp=time.time(),
+            details={"attempts": self.retry_attempts}
+        )
     
     async def run_all_checks(self) -> Dict[str, HealthCheckResult]:
         """Run all registered health checks."""
@@ -270,31 +316,31 @@ async def ai_services_health_check() -> Dict[str, Any]:
     """Check AI services availability."""
     try:
         from src.ai.factory import AIAnnotatorFactory
-        
-        factory = AIAnnotatorFactory()
+
         available_services = []
         unavailable_services = []
-        
-        # Test each AI service
+
+        # Test each AI service using the factory's health check method
         for service_name in ["ollama", "huggingface", "zhipu", "baidu"]:
             try:
-                annotator = factory.create_annotator(service_name)
-                if annotator and await annotator.test_connection():
+                health_result = await AIAnnotatorFactory.check_service_health(service_name)
+                if health_result.get("available", False):
                     available_services.append(service_name)
                 else:
                     unavailable_services.append(service_name)
             except Exception:
                 unavailable_services.append(service_name)
-        
+
         if available_services:
             status = "healthy" if not unavailable_services else "warning"
             message = f"AI services available: {', '.join(available_services)}"
             if unavailable_services:
                 message += f", unavailable: {', '.join(unavailable_services)}"
         else:
-            status = "unhealthy"
-            message = "No AI services are available"
-        
+            # If no AI services are configured, treat as warning not unhealthy
+            status = "warning"
+            message = "No AI services are currently available"
+
         return {
             "status": status,
             "message": message,
@@ -303,7 +349,7 @@ async def ai_services_health_check() -> Dict[str, Any]:
                 "unavailable": unavailable_services
             }
         }
-        
+
     except Exception as e:
         return {
             "status": "unhealthy",
@@ -316,9 +362,15 @@ async def storage_health_check() -> Dict[str, Any]:
     try:
         import os
         import shutil
-        
+
         upload_dir = settings.app.upload_dir
-        
+
+        # Get minimum disk space threshold from config
+        try:
+            min_disk_space_gb = settings.health_check.min_disk_space_gb
+        except AttributeError:
+            min_disk_space_gb = 1.0
+
         # Check if upload directory exists and is writable
         if not os.path.exists(upload_dir):
             try:
@@ -328,28 +380,29 @@ async def storage_health_check() -> Dict[str, Any]:
                     "status": "unhealthy",
                     "message": f"Cannot create upload directory: {str(e)}"
                 }
-        
+
         # Check disk space
         disk_usage = shutil.disk_usage(upload_dir)
         free_space_gb = disk_usage.free / (1024**3)
-        
-        if free_space_gb < 1.0:  # Less than 1GB free
+
+        if free_space_gb < min_disk_space_gb:
             status = "warning"
-            message = f"Low disk space: {free_space_gb:.2f}GB free"
+            message = f"Low disk space: {free_space_gb:.2f}GB free (minimum: {min_disk_space_gb}GB)"
         else:
             status = "healthy"
             message = f"Storage OK: {free_space_gb:.2f}GB free"
-        
+
         return {
             "status": status,
             "message": message,
             "details": {
                 "upload_dir": upload_dir,
                 "free_space_gb": round(free_space_gb, 2),
-                "total_space_gb": round(disk_usage.total / (1024**3), 2)
+                "total_space_gb": round(disk_usage.total / (1024**3), 2),
+                "min_required_gb": min_disk_space_gb
             }
         }
-        
+
     except Exception as e:
         return {
             "status": "unhealthy",

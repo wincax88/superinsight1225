@@ -113,22 +113,49 @@ class RedisSettings:
 
 
 @dataclass
+class HealthCheckSettings:
+    """Health check configuration settings"""
+
+    # General health check settings
+    health_check_enabled: bool = field(default_factory=lambda: get_env_bool("HEALTH_CHECK_ENABLED", True))
+    health_check_timeout: int = field(default_factory=lambda: get_env_int("HEALTH_CHECK_TIMEOUT", 30))
+    health_check_retry_attempts: int = field(default_factory=lambda: get_env_int("HEALTH_CHECK_RETRY_ATTEMPTS", 3))
+    health_check_retry_delay: float = field(default_factory=lambda: get_env_float("HEALTH_CHECK_RETRY_DELAY", 1.0))
+
+    # Individual health check toggles
+    database_check_enabled: bool = field(default_factory=lambda: get_env_bool("DATABASE_CHECK_ENABLED", True))
+    label_studio_check_enabled: bool = field(default_factory=lambda: get_env_bool("LABEL_STUDIO_CHECK_ENABLED", True))
+    ai_services_check_enabled: bool = field(default_factory=lambda: get_env_bool("AI_SERVICES_CHECK_ENABLED", True))
+    storage_check_enabled: bool = field(default_factory=lambda: get_env_bool("STORAGE_CHECK_ENABLED", True))
+    security_check_enabled: bool = field(default_factory=lambda: get_env_bool("SECURITY_CHECK_ENABLED", True))
+    external_deps_check_enabled: bool = field(default_factory=lambda: get_env_bool("EXTERNAL_DEPS_CHECK_ENABLED", True))
+
+    # Kubernetes probe settings
+    liveness_probe_path: str = field(default_factory=lambda: get_env("LIVENESS_PROBE_PATH", "/health/live"))
+    readiness_probe_path: str = field(default_factory=lambda: get_env("READINESS_PROBE_PATH", "/health/ready"))
+
+    # Thresholds
+    min_disk_space_gb: float = field(default_factory=lambda: get_env_float("MIN_DISK_SPACE_GB", 1.0))
+    max_response_time_ms: int = field(default_factory=lambda: get_env_int("MAX_RESPONSE_TIME_MS", 5000))
+
+
+@dataclass
 class AppSettings:
     """Application configuration settings"""
-    
+
     app_name: str = field(default_factory=lambda: get_env("APP_NAME", "SuperInsight Platform"))
     app_version: str = field(default_factory=lambda: get_env("APP_VERSION", "1.0.0"))
     debug: bool = field(default_factory=lambda: get_env_bool("DEBUG", True))
     log_level: str = field(default_factory=lambda: get_env("LOG_LEVEL", "INFO"))
-    
+
     # File storage settings
     upload_dir: str = field(default_factory=lambda: get_env("UPLOAD_DIR", "./uploads"))
     max_file_size: str = field(default_factory=lambda: get_env("MAX_FILE_SIZE", "100MB"))
-    
+
     # Quality management settings
     ragas_api_key: Optional[str] = field(default_factory=lambda: get_env("RAGAS_API_KEY") or None)
     quality_threshold: float = field(default_factory=lambda: get_env_float("QUALITY_THRESHOLD", 0.8))
-    
+
     # Billing settings
     billing_currency: str = field(default_factory=lambda: get_env("BILLING_CURRENCY", "CNY"))
     billing_rate_per_hour: float = field(default_factory=lambda: get_env_float("BILLING_RATE_PER_HOUR", 100.0))
@@ -138,7 +165,7 @@ class AppSettings:
 @dataclass
 class Settings:
     """Main settings class that combines all configuration sections"""
-    
+
     database: DatabaseSettings = field(default_factory=DatabaseSettings)
     label_studio: LabelStudioSettings = field(default_factory=LabelStudioSettings)
     ai: AISettings = field(default_factory=AISettings)
@@ -146,6 +173,7 @@ class Settings:
     tcb: TCBSettings = field(default_factory=TCBSettings)
     redis: RedisSettings = field(default_factory=RedisSettings)
     app: AppSettings = field(default_factory=AppSettings)
+    health_check: HealthCheckSettings = field(default_factory=HealthCheckSettings)
 
 
 # Load .env file if it exists
