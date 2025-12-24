@@ -1,0 +1,51 @@
+{
+  "appName": "SuperInsight",
+  "menu": {
+    "dashboard": "Dashboard",
+    "tasks": "Task Management",
+    "billing": "Billing",
+    "settings": "Settings",
+    "admin": "Admin Console"
+  },
+  "actions": {
+    "submit": "Submit",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "delete": "Delete",
+    "edit": "Edit",
+    "save": "Save",
+    "search": "Search",
+    "reset": "Reset",
+    "refresh": "Refresh",
+    "export": "Export",
+    "import": "Import",
+    "back": "Back"
+  },
+  "status": {
+    "loading": "Loading...",
+    "success": "Operation successful",
+    "error": "Operation failed",
+    "noData": "No data"
+  },
+  "validation": {
+    "required": "This field is required",
+    "invalidEmail": "Please enter a valid email",
+    "minLength": "Minimum {{min}} characters required",
+    "maxLength": "Maximum {{max}} characters allowed"
+  },
+  "time": {
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "thisWeek": "This Week",
+    "thisMonth": "This Month",
+    "lastMonth": "Last Month"
+  },
+  "theme": {
+    "light": "Light Mode",
+    "dark": "Dark Mode"
+  },
+  "language": {
+    "zh": "中文",
+    "en": "English"
+  }
+}
