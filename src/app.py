@@ -481,6 +481,16 @@ except Exception as e:
     import traceback
     traceback.print_exc()
 
+# Include enhanced admin router
+try:
+    from src.api.admin_enhanced import router as admin_enhanced_router
+    app.include_router(admin_enhanced_router)
+    logger.info("Enhanced Admin API loaded successfully")
+except Exception as e:
+    logger.error(f"Enhanced Admin API failed to load: {e}")
+    import traceback
+    traceback.print_exc()
+
 # Force include security router
 try:
     from src.api.security import router as security_router

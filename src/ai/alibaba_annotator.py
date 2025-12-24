@@ -1,19 +1,15 @@
 """
-Tencent Hunyuan AI Annotator for SuperInsight platform.
+Alibaba Tongyi Qianwen AI Annotator for SuperInsight platform.
 
-Integrates with Tencent Cloud Hunyuan API for AI pre-annotation.
+Integrates with Alibaba Cloud Tongyi Qianwen API for AI pre-annotation.
 """
 
 import asyncio
 import json
-import hmac
-import hashlib
 import time
 from typing import Dict, Any, List, Optional
 from uuid import uuid4
-from datetime import datetime
 import httpx
-import logging
 
 from .base import AIAnnotator, ModelConfig, Prediction, AIAnnotationError, ModelType
 try:
@@ -21,108 +17,42 @@ try:
 except ImportError:
     from src.models.task import Task
 
-logger = logging.getLogger(__name__)
 
-class HunyuanAnnotator(AIAnnotator):
-    """Tencent Hunyuan AI Annotator."""
+class AlibabaAnnotator(AIAnnotator):
+    """AI Annotator using Alibaba Tongyi Qianwen models."""
     
     def __init__(self, config: ModelConfig):
-        """Initialize Hunyuan annotator."""
-        if config.model_type != ModelType.TENCENT_HUNYUAN:
-            raise ValueError("ModelConfig must have model_type=TENCENT_HUNYUAN")
+        """Initialize Alibaba annotator."""
+        if config.model_type != ModelType.ALIBABA_TONGYI:
+            raise ValueError("ModelConfig must have model_type=ALIBABA_TONGYI")
         super().__init__(config)
         
         # Set up API client with authentication
         headers = {
             "Content-Type": "application/json",
-            "Accept": "application/json",
-            "User-Agent": "SuperInsight/1.0"
+            "Accept": "application/json"
         }
+        if self.config.api_key:
+            headers["Authorization"] = f"Bearer {self.config.api_key}"
         
         self.client = httpx.AsyncClient(
             headers=headers,
             timeout=config.timeout
         )
         
-        # Tencent Cloud API configuration
-        self.region = "ap-beijing"
-        self.endpoint = self.config.base_url or "https://hunyuan.tencentcloudapi.com"
-        self.secret_id = self.config.api_key
-        self.secret_key = self.config.secret_key
+        # Alibaba Tongyi API base URL
+        self.api_base = self.config.base_url or "https://dashscope.aliyuncs.com/api/v1"
     
     def _validate_config(self) -> None:
-        """Validate Tencent-specific configuration."""
+        """Validate Alibaba-specific configuration."""
         if not self.config.api_key:
-            raise ValueError("api_key (SecretId) is required for Tencent Hunyuan")
+            raise ValueError("api_key is required for Alibaba Tongyi")
         if not self.config.model_name:
-            raise ValueError("model_name is required for Tencent Hunyuan")
-        if not self.config.secret_key:
-            raise ValueError("secret_key (SecretKey) is required for Tencent Hunyuan")
-    
-    def _generate_signature(self, params: Dict[str, Any], timestamp: int) -> str:
-        """生成腾讯云 API 签名"""
-        # 构建签名字符串
-        sorted_params = sorted(params.items())
-        query_string = urlencode(sorted_params)
-        
-        string_to_sign = f"POST\nhunyuan.tencentcloudapi.com\n/\n{query_string}"
-        
-        # 计算签名
-        signature = hmac.new(
-            self.secret_key.encode('utf-8'),
-            string_to_sign.encode('utf-8'),
-            hashlib.sha1
-        ).hexdigest()
-        
-        return signature
-    
-    async def _make_chat_completion_request(self, messages: List[Dict[str, str]]) -> Dict[str, Any]:
-        """Make chat completion request to Tencent API."""
-        timestamp = int(time.time())
-        
-        # Prepare request parameters
-        params = {
-            'Action': 'ChatCompletions',
-            'Region': self.region,
-            'Timestamp': timestamp,
-            'Nonce': int(time.time() * 1000),
-            'SecretId': self.secret_id,
-            'Version': '2023-09-01',
-            'Model': self.config.model_name,
-            'Messages': messages,
-            'Temperature': self.config.temperature,
-            'MaxTokens': self.config.max_tokens
-        }
-        
-        # Generate signature
-        signature = self._generate_signature(params, timestamp)
-        params['Signature'] = signature
-        
-        try:
-            response = await self.client.post(
-                self.endpoint,
-                data=params,
-                headers={"Content-Type": "application/x-www-form-urlencoded"}
-            )
-            response.raise_for_status()
-            
-            result = response.json()
-            
-            if 'Error' in result.get('Response', {}):
-                error = result['Response']['Error']
-                raise AIAnnotationError(
-                    f"Tencent API error: {error['Code']} - {error['Message']}",
-                    "tencent_hunyuan"
-                )
-            
-            return result.get('Response', {})
-            
-        except httpx.HTTPError as e:
-            raise AIAnnotationError(f"Tencent API request failed: {str(e)}", "tencent_hunyuan")
+            raise ValueError("model_name is required for Alibaba Tongyi")
     
     async def predict(self, task: Task) -> Prediction:
         """
-        Generate prediction using Tencent Hunyuan model.
+        Generate prediction using Alibaba Tongyi model.
         
         Args:
             task: The annotation task to predict
@@ -139,11 +69,11 @@ class HunyuanAnnotator(AIAnnotator):
             # Prepare messages for chat completion
             messages = self._prepare_annotation_messages(document_content, task.project_id)
             
-            # Make request to Tencent API
+            # Make request to Alibaba API
             response = await self._make_chat_completion_request(messages)
             
             # Parse response and calculate confidence
-            prediction_data, confidence = self._parse_hunyuan_response(response)
+            prediction_data, confidence = self._parse_alibaba_response(response)
             
             processing_time = time.time() - start_time
             
@@ -158,10 +88,33 @@ class HunyuanAnnotator(AIAnnotator):
             
         except Exception as e:
             raise AIAnnotationError(
-                f"Tencent Hunyuan prediction failed: {str(e)}",
-                model_type="tencent_hunyuan",
+                f"Alibaba Tongyi prediction failed: {str(e)}",
+                model_type="alibaba_tongyi",
                 task_id=task.id
             )
+    
+    async def _make_chat_completion_request(self, messages: List[Dict[str, str]]) -> Dict[str, Any]:
+        """Make chat completion request to Alibaba API."""
+        url = f"{self.api_base}/services/aigc/text-generation/generation"
+        
+        payload = {
+            "model": self.config.model_name,
+            "input": {
+                "messages": messages
+            },
+            "parameters": {
+                "temperature": self.config.temperature,
+                "max_tokens": self.config.max_tokens,
+                "result_format": "message"
+            }
+        }
+        
+        try:
+            response = await self.client.post(url, json=payload)
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPError as e:
+            raise AIAnnotationError(f"Alibaba API request failed: {str(e)}", "alibaba_tongyi")
     
     def _prepare_annotation_messages(self, content: str, project_id: str) -> List[Dict[str, str]]:
         """Prepare chat messages for annotation task."""
@@ -176,8 +129,8 @@ class HunyuanAnnotator(AIAnnotator):
 """
         
         return [
-            {"Role": "system", "Content": system_prompt},
-            {"Role": "user", "Content": user_prompt}
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
         ]
     
     def _get_system_prompt(self, project_id: str) -> str:
@@ -198,15 +151,24 @@ class HunyuanAnnotator(AIAnnotator):
             return """你是一个专业的文本标注专家。请对文本进行综合分析，返回JSON格式：
 {"sentiment": "情感倾向", "entities": [], "categories": [], "confidence": 0.0-1.0, "summary": "分析摘要"}"""
     
-    def _parse_hunyuan_response(self, response: Dict[str, Any]) -> tuple[Dict[str, Any], float]:
-        """Parse Hunyuan response and extract prediction data and confidence."""
+    def _parse_alibaba_response(self, response: Dict[str, Any]) -> tuple[Dict[str, Any], float]:
+        """Parse Alibaba response and extract prediction data and confidence."""
         try:
-            choices = response.get('Choices', [])
+            # Check for API errors
+            if "code" in response and response["code"] != "200":
+                return {
+                    "error": f"Alibaba API error: {response.get('message', 'Unknown error')}",
+                    "error_code": response.get("code")
+                }, 0.0
+            
+            output = response.get("output", {})
+            choices = output.get("choices", [])
+            
             if not choices:
                 return {"error": "No choices in response"}, 0.0
             
-            message = choices[0].get('Message', {})
-            content = message.get('Content', '')
+            message = choices[0].get("message", {})
+            content = message.get("content", "")
             
             # Try to extract JSON from response
             content = content.strip()
@@ -225,9 +187,9 @@ class HunyuanAnnotator(AIAnnotator):
                 
                 # Add metadata
                 prediction_data["model_response"] = {
-                    "usage": response.get("Usage", {}),
-                    "request_id": response.get("RequestId", ""),
-                    "finish_reason": choices[0].get("FinishReason", "")
+                    "usage": response.get("usage", {}),
+                    "request_id": response.get("request_id", ""),
+                    "finish_reason": choices[0].get("finish_reason", "")
                 }
                 
                 return prediction_data, confidence
@@ -239,7 +201,7 @@ class HunyuanAnnotator(AIAnnotator):
                     "sentiment": "neutral",
                     "entities": [],
                     "categories": [],
-                    "model_response": response.get("Usage", {})
+                    "model_response": response.get("usage", {})
                 }, 0.6
                 
         except Exception as e:
@@ -249,31 +211,28 @@ class HunyuanAnnotator(AIAnnotator):
             }, 0.2
     
     def get_model_info(self) -> Dict[str, Any]:
-        """Get information about the Tencent Hunyuan model."""
+        """Get information about the Alibaba Tongyi model."""
         return {
-            "model_type": "tencent_hunyuan",
+            "model_type": "alibaba_tongyi",
             "model_name": self.config.model_name,
-            "api_endpoint": self.endpoint,
-            "region": self.region,
+            "api_base": self.api_base,
             "max_tokens": self.config.max_tokens,
             "temperature": self.config.temperature,
             "timeout": self.config.timeout,
-            "has_api_key": bool(self.secret_id),
-            "capabilities": [
-                "text_classification",
-                "named_entity_recognition", 
-                "sentiment_analysis",
-                "text_generation"
-            ]
+            "has_api_key": bool(self.config.api_key)
         }
     
     async def list_available_models(self) -> List[str]:
-        """List available Tencent Hunyuan models."""
+        """List available Alibaba Tongyi models."""
         return [
-            "hunyuan-lite",
-            "hunyuan-standard",
-            "hunyuan-pro",
-            "hunyuan-turbo"
+            "qwen-turbo",
+            "qwen-plus",
+            "qwen-max",
+            "qwen-max-1201",
+            "qwen-max-longcontext",
+            "qwen1.5-72b-chat",
+            "qwen1.5-14b-chat",
+            "qwen1.5-7b-chat"
         ]
     
     async def check_model_availability(self) -> bool:
@@ -281,11 +240,22 @@ class HunyuanAnnotator(AIAnnotator):
         try:
             # Make a simple test request
             test_messages = [
-                {"Role": "user", "Content": "测试"}
+                {"role": "user", "content": "测试"}
             ]
             
-            response = await self._make_chat_completion_request(test_messages)
-            return "Choices" in response
+            url = f"{self.api_base}/services/aigc/text-generation/generation"
+            payload = {
+                "model": self.config.model_name,
+                "input": {
+                    "messages": test_messages
+                },
+                "parameters": {
+                    "max_tokens": 10
+                }
+            }
+            
+            response = await self.client.post(url, json=payload)
+            return response.status_code == 200
             
         except Exception:
             return False

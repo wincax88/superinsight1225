@@ -563,7 +563,7 @@ class ExportService:
         
         # Write COCO format to file
         with open(file_path, 'w', encoding='utf-8') as f:
-            json.dump(coco_dataset.dict(), f, ensure_ascii=False, indent=2)
+            json.dump(coco_dataset.model_dump(), f, ensure_ascii=False, indent=2)
         
         return str(file_path)
     

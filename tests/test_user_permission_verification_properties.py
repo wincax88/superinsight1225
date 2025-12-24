@@ -229,21 +229,18 @@ class TestUserPermissionVerificationConsistency:
         mock_user = self._create_mock_user(user_data)
         
         # Mock database queries
-        with patch.object(self.mock_db_session, 'query') as mock_query:
-            # Mock user query
-            def mock_user_query(*args, **kwargs):
-                mock_result = Mock()
-                mock_result.filter.return_value.first.return_value = mock_user
-                return mock_result
+        with patch.object(self.mock_db_session, 'execute') as mock_execute:
+            # Mock user query result
+            mock_user_result = Mock()
+            mock_user_result.scalar_one_or_none.return_value = mock_user
             
-            # Mock permission query
-            def mock_permission_query(*args, **kwargs):
-                mock_result = Mock()
-                permissions = self._mock_query_permissions(user_data["id"], project_id, permission_type)
-                mock_result.filter.return_value.first.return_value = permissions[0] if permissions else None
-                return mock_result
+            # Mock permission query result
+            mock_permission_result = Mock()
+            permissions = self._mock_query_permissions(user_data["id"], project_id, permission_type)
+            mock_permission_result.scalar_one_or_none.return_value = permissions[0] if permissions else None
             
-            mock_query.side_effect = [mock_user_query(), mock_permission_query()]
+            # Set up execute to return appropriate results for each call
+            mock_execute.side_effect = [mock_user_result, mock_permission_result]
             
             # Test permission check
             has_permission = self.security_controller.check_project_permission(
@@ -284,20 +281,17 @@ class TestUserPermissionVerificationConsistency:
         mock_permission = self._create_mock_permission(permission_data)
         
         # Mock database queries
-        with patch.object(self.mock_db_session, 'query') as mock_query:
-            # Mock user query
-            def mock_user_query(*args, **kwargs):
-                mock_result = Mock()
-                mock_result.filter.return_value.first.return_value = mock_user
-                return mock_result
+        with patch.object(self.mock_db_session, 'execute') as mock_execute:
+            # Mock user query result
+            mock_user_result = Mock()
+            mock_user_result.scalar_one_or_none.return_value = mock_user
             
-            # Mock permission query
-            def mock_permission_query(*args, **kwargs):
-                mock_result = Mock()
-                mock_result.filter.return_value.first.return_value = mock_permission
-                return mock_result
+            # Mock permission query result
+            mock_permission_result = Mock()
+            mock_permission_result.scalar_one_or_none.return_value = mock_permission
             
-            mock_query.side_effect = [mock_user_query(), mock_permission_query()]
+            # Set up execute to return appropriate results for each call
+            mock_execute.side_effect = [mock_user_result, mock_permission_result]
             
             # Test permission check
             has_permission = self.security_controller.check_project_permission(
@@ -351,23 +345,20 @@ class TestUserPermissionVerificationConsistency:
             for project_id in projects:
                 for permission_type in PermissionType:
                     # Mock database queries for this specific check
-                    with patch.object(self.mock_db_session, 'query') as mock_query:
+                    with patch.object(self.mock_db_session, 'execute') as mock_execute:
                         mock_user = mock_users[user_id]
                         
-                        # Mock user query
-                        def mock_user_query(*args, **kwargs):
-                            mock_result = Mock()
-                            mock_result.filter.return_value.first.return_value = mock_user
-                            return mock_result
+                        # Mock user query result
+                        mock_user_result = Mock()
+                        mock_user_result.scalar_one_or_none.return_value = mock_user
                         
-                        # Mock permission query
-                        def mock_permission_query(*args, **kwargs):
-                            mock_result = Mock()
-                            perms = self._mock_query_permissions(user_id, project_id, permission_type)
-                            mock_result.filter.return_value.first.return_value = perms[0] if perms else None
-                            return mock_result
+                        # Mock permission query result
+                        mock_permission_result = Mock()
+                        perms = self._mock_query_permissions(user_id, project_id, permission_type)
+                        mock_permission_result.scalar_one_or_none.return_value = perms[0] if perms else None
                         
-                        mock_query.side_effect = [mock_user_query(), mock_permission_query()]
+                        # Set up execute to return appropriate results for each call
+                        mock_execute.side_effect = [mock_user_result, mock_permission_result]
                         
                         # Check permission
                         has_permission = self.security_controller.check_project_permission(
@@ -411,14 +402,11 @@ class TestUserPermissionVerificationConsistency:
         for project_id in projects:
             for permission_type in PermissionType:
                 # Mock database queries
-                with patch.object(self.mock_db_session, 'query') as mock_query:
-                    # Mock user query
-                    def mock_user_query(*args, **kwargs):
-                        mock_result = Mock()
-                        mock_result.filter.return_value.first.return_value = mock_user
-                        return mock_result
-                    
-                    mock_query.return_value = mock_user_query()
+                with patch.object(self.mock_db_session, 'execute') as mock_execute:
+                    # Mock user query result
+                    mock_user_result = Mock()
+                    mock_user_result.scalar_one_or_none.return_value = mock_user
+                    mock_execute.return_value = mock_user_result
                     
                     # Check permission
                     has_permission = self.security_controller.check_project_permission(
@@ -575,25 +563,22 @@ class TestUserPermissionVerificationConsistency:
                 granted_projects.append(project_id)
         
         # Mock database queries
-        with patch.object(self.mock_db_session, 'query') as mock_query:
-            # Mock user query
-            def mock_user_query(*args, **kwargs):
-                mock_result = Mock()
-                mock_result.filter.return_value.first.return_value = mock_user
-                return mock_result
+        with patch.object(self.mock_db_session, 'execute') as mock_execute:
+            # Mock user query result
+            mock_user_result = Mock()
+            mock_user_result.scalar_one_or_none.return_value = mock_user
             
-            # Mock permissions query for get_user_projects
-            def mock_permissions_query(*args, **kwargs):
-                mock_result = Mock()
-                # Return all permissions for this user
-                user_permissions = []
-                for key, permission in self.mock_db_permissions.items():
-                    if key[0] == user_data["id"]:  # user_id matches
-                        user_permissions.append(permission)
-                mock_result.filter.return_value.all.return_value = user_permissions
-                return mock_result
+            # Mock permissions query result for get_user_projects
+            mock_permissions_result = Mock()
+            # Return all permissions for this user
+            user_permissions = []
+            for key, permission in self.mock_db_permissions.items():
+                if key[0] == user_data["id"]:  # user_id matches
+                    user_permissions.append(permission)
+            mock_permissions_result.scalars.return_value.all.return_value = user_permissions
             
-            mock_query.side_effect = [mock_user_query(), mock_permissions_query()]
+            # Set up execute to return appropriate results for each call
+            mock_execute.side_effect = [mock_user_result, mock_permissions_result]
             
             # Get user's project list
             user_projects = self.security_controller.get_user_projects(
@@ -638,11 +623,11 @@ class TestUserPermissionVerificationEdgeCases:
         project_id = "test_project"
         permission_type = PermissionType.READ
         
-        # Mock user query to return None
-        with patch.object(self.mock_db_session, 'query') as mock_query:
+        # Mock SQLAlchemy 2.0 style execute query to return None
+        with patch.object(self.mock_db_session, 'execute') as mock_execute:
             mock_result = Mock()
-            mock_result.filter.return_value.first.return_value = None
-            mock_query.return_value = mock_result
+            mock_result.scalar_one_or_none.return_value = None
+            mock_execute.return_value = mock_result
             
             # Check permission for nonexistent user
             has_permission = self.security_controller.check_project_permission(
@@ -676,20 +661,10 @@ class TestUserPermissionVerificationEdgeCases:
             if empty_project_id is None:
                 continue  # Skip None as it would cause different error
                 
-            with patch.object(self.mock_db_session, 'query') as mock_query:
-                # Mock user query
-                def mock_user_query(*args, **kwargs):
-                    mock_result = Mock()
-                    mock_result.filter.return_value.first.return_value = mock_user
-                    return mock_result
-                
-                # Mock permission query
-                def mock_permission_query(*args, **kwargs):
-                    mock_result = Mock()
-                    mock_result.filter.return_value.first.return_value = None
-                    return mock_result
-                
-                mock_query.side_effect = [mock_user_query(), mock_permission_query()]
+            # Mock SQLAlchemy 2.0 style execute - but the method should return False before querying
+            with patch.object(self.mock_db_session, 'execute') as mock_execute:
+                # The method should return False immediately for empty project IDs
+                # without even executing a query
                 
                 # Check permission with empty project ID
                 has_permission = self.security_controller.check_project_permission(
@@ -742,21 +717,27 @@ class TestUserPermissionVerificationEdgeCases:
             
             assert grant_result, "Permission grant should succeed"
             
-            # Mock permission exists for revoke
+            # Mock permission exists for revoke using SQLAlchemy 2.0 style
             mock_permission = Mock()
             mock_permission.user_id = user_id
             mock_permission.project_id = project_id
             mock_permission.permission_type = permission_type
             
-            with patch.object(self.mock_db_session, 'query') as mock_query, \
+            with patch.object(self.mock_db_session, 'execute') as mock_execute, \
                  patch.object(self.mock_db_session, 'delete') as mock_delete, \
-                 patch.object(self.mock_db_session, 'commit') as mock_commit2:
+                 patch.object(self.mock_db_session, 'commit') as mock_commit2, \
+                 patch.object(self.mock_db_session, 'rollback') as mock_rollback2:
                 
                 mock_result = Mock()
-                mock_result.filter.return_value.first.return_value = mock_permission
-                mock_query.return_value = mock_result
+                mock_result.scalar_one_or_none.return_value = mock_permission
+                mock_execute.return_value = mock_result
                 mock_commit2.return_value = None
                 mock_delete.return_value = None
+                mock_rollback2.return_value = None
+                
+                # Ensure no exceptions are raised
+                mock_commit2.side_effect = None
+                mock_delete.side_effect = None
                 
                 # Revoke permission
                 revoke_result = self.security_controller.revoke_project_permission(
@@ -794,20 +775,17 @@ class TestUserPermissionVerificationEdgeCases:
         # Perform multiple permission checks
         results = []
         for i in range(5):
-            with patch.object(self.mock_db_session, 'query') as mock_query:
-                # Mock user query
-                def mock_user_query(*args, **kwargs):
-                    mock_result = Mock()
-                    mock_result.filter.return_value.first.return_value = mock_user
-                    return mock_result
+            with patch.object(self.mock_db_session, 'execute') as mock_execute:
+                # Mock user query result
+                mock_user_result = Mock()
+                mock_user_result.scalar_one_or_none.return_value = mock_user
                 
-                # Mock permission query
-                def mock_permission_query(*args, **kwargs):
-                    mock_result = Mock()
-                    mock_result.filter.return_value.first.return_value = mock_permission
-                    return mock_result
+                # Mock permission query result
+                mock_permission_result = Mock()
+                mock_permission_result.scalar_one_or_none.return_value = mock_permission
                 
-                mock_query.side_effect = [mock_user_query(), mock_permission_query()]
+                # Set up execute to return appropriate results for each call
+                mock_execute.side_effect = [mock_user_result, mock_permission_result]
                 
                 # Check permission
                 has_permission = self.security_controller.check_project_permission(

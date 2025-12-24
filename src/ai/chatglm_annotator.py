@@ -1,19 +1,15 @@
 """
-Tencent Hunyuan AI Annotator for SuperInsight platform.
+ChatGLM Open Source Model Annotator for SuperInsight platform.
 
-Integrates with Tencent Cloud Hunyuan API for AI pre-annotation.
+Integrates with ChatGLM models via local deployment or API endpoints.
 """
 
 import asyncio
 import json
-import hmac
-import hashlib
 import time
 from typing import Dict, Any, List, Optional
 from uuid import uuid4
-from datetime import datetime
 import httpx
-import logging
 
 from .base import AIAnnotator, ModelConfig, Prediction, AIAnnotationError, ModelType
 try:
@@ -21,108 +17,50 @@ try:
 except ImportError:
     from src.models.task import Task
 
-logger = logging.getLogger(__name__)
 
-class HunyuanAnnotator(AIAnnotator):
-    """Tencent Hunyuan AI Annotator."""
+class ChatGLMAnnotator(AIAnnotator):
+    """AI Annotator using ChatGLM models (local or API deployment)."""
     
     def __init__(self, config: ModelConfig):
-        """Initialize Hunyuan annotator."""
-        if config.model_type != ModelType.TENCENT_HUNYUAN:
-            raise ValueError("ModelConfig must have model_type=TENCENT_HUNYUAN")
+        """Initialize ChatGLM annotator."""
+        # Use HUGGINGFACE type for ChatGLM as it's an open source model
+        if config.model_type not in [ModelType.HUGGINGFACE, ModelType.OLLAMA]:
+            raise ValueError("ChatGLM should use HUGGINGFACE or OLLAMA model_type")
         super().__init__(config)
         
-        # Set up API client with authentication
+        # Set up API client
         headers = {
             "Content-Type": "application/json",
-            "Accept": "application/json",
-            "User-Agent": "SuperInsight/1.0"
+            "Accept": "application/json"
         }
+        if self.config.api_key:
+            headers["Authorization"] = f"Bearer {self.config.api_key}"
         
         self.client = httpx.AsyncClient(
             headers=headers,
             timeout=config.timeout
         )
         
-        # Tencent Cloud API configuration
-        self.region = "ap-beijing"
-        self.endpoint = self.config.base_url or "https://hunyuan.tencentcloudapi.com"
-        self.secret_id = self.config.api_key
-        self.secret_key = self.config.secret_key
+        # Default to local deployment endpoint
+        self.api_base = self.config.base_url or "http://localhost:8000"
     
     def _validate_config(self) -> None:
-        """Validate Tencent-specific configuration."""
-        if not self.config.api_key:
-            raise ValueError("api_key (SecretId) is required for Tencent Hunyuan")
+        """Validate ChatGLM-specific configuration."""
         if not self.config.model_name:
-            raise ValueError("model_name is required for Tencent Hunyuan")
-        if not self.config.secret_key:
-            raise ValueError("secret_key (SecretKey) is required for Tencent Hunyuan")
-    
-    def _generate_signature(self, params: Dict[str, Any], timestamp: int) -> str:
-        """生成腾讯云 API 签名"""
-        # 构建签名字符串
-        sorted_params = sorted(params.items())
-        query_string = urlencode(sorted_params)
+            raise ValueError("model_name is required for ChatGLM")
         
-        string_to_sign = f"POST\nhunyuan.tencentcloudapi.com\n/\n{query_string}"
-        
-        # 计算签名
-        signature = hmac.new(
-            self.secret_key.encode('utf-8'),
-            string_to_sign.encode('utf-8'),
-            hashlib.sha1
-        ).hexdigest()
-        
-        return signature
-    
-    async def _make_chat_completion_request(self, messages: List[Dict[str, str]]) -> Dict[str, Any]:
-        """Make chat completion request to Tencent API."""
-        timestamp = int(time.time())
-        
-        # Prepare request parameters
-        params = {
-            'Action': 'ChatCompletions',
-            'Region': self.region,
-            'Timestamp': timestamp,
-            'Nonce': int(time.time() * 1000),
-            'SecretId': self.secret_id,
-            'Version': '2023-09-01',
-            'Model': self.config.model_name,
-            'Messages': messages,
-            'Temperature': self.config.temperature,
-            'MaxTokens': self.config.max_tokens
-        }
-        
-        # Generate signature
-        signature = self._generate_signature(params, timestamp)
-        params['Signature'] = signature
-        
-        try:
-            response = await self.client.post(
-                self.endpoint,
-                data=params,
-                headers={"Content-Type": "application/x-www-form-urlencoded"}
-            )
-            response.raise_for_status()
-            
-            result = response.json()
-            
-            if 'Error' in result.get('Response', {}):
-                error = result['Response']['Error']
-                raise AIAnnotationError(
-                    f"Tencent API error: {error['Code']} - {error['Message']}",
-                    "tencent_hunyuan"
-                )
-            
-            return result.get('Response', {})
-            
-        except httpx.HTTPError as e:
-            raise AIAnnotationError(f"Tencent API request failed: {str(e)}", "tencent_hunyuan")
+        # Validate model name is a ChatGLM variant
+        valid_models = [
+            "chatglm3-6b", "chatglm2-6b", "chatglm-6b",
+            "chatglm3-6b-32k", "chatglm2-6b-32k",
+            "chatglm3-6b-base", "chatglm2-6b-base"
+        ]
+        if not any(model in self.config.model_name.lower() for model in valid_models):
+            print(f"Warning: {self.config.model_name} may not be a valid ChatGLM model")
     
     async def predict(self, task: Task) -> Prediction:
         """
-        Generate prediction using Tencent Hunyuan model.
+        Generate prediction using ChatGLM model.
         
         Args:
             task: The annotation task to predict
@@ -139,11 +77,11 @@ class HunyuanAnnotator(AIAnnotator):
             # Prepare messages for chat completion
             messages = self._prepare_annotation_messages(document_content, task.project_id)
             
-            # Make request to Tencent API
+            # Make request to ChatGLM API
             response = await self._make_chat_completion_request(messages)
             
             # Parse response and calculate confidence
-            prediction_data, confidence = self._parse_hunyuan_response(response)
+            prediction_data, confidence = self._parse_chatglm_response(response)
             
             processing_time = time.time() - start_time
             
@@ -158,10 +96,59 @@ class HunyuanAnnotator(AIAnnotator):
             
         except Exception as e:
             raise AIAnnotationError(
-                f"Tencent Hunyuan prediction failed: {str(e)}",
-                model_type="tencent_hunyuan",
+                f"ChatGLM prediction failed: {str(e)}",
+                model_type="chatglm",
                 task_id=task.id
             )
+    
+    async def _make_chat_completion_request(self, messages: List[Dict[str, str]]) -> Dict[str, Any]:
+        """Make chat completion request to ChatGLM API."""
+        # Try OpenAI-compatible API first
+        url = f"{self.api_base}/v1/chat/completions"
+        
+        payload = {
+            "model": self.config.model_name,
+            "messages": messages,
+            "temperature": self.config.temperature,
+            "max_tokens": self.config.max_tokens,
+            "stream": False
+        }
+        
+        try:
+            response = await self.client.post(url, json=payload)
+            if response.status_code == 200:
+                return response.json()
+        except httpx.HTTPError:
+            pass  # Try alternative endpoint
+        
+        # Try ChatGLM-specific API format
+        url = f"{self.api_base}/api/chat"
+        
+        # Convert messages to ChatGLM format
+        history = []
+        query = ""
+        
+        for msg in messages:
+            if msg["role"] == "user":
+                query = msg["content"]
+            elif msg["role"] == "assistant":
+                if query:
+                    history.append([query, msg["content"]])
+                    query = ""
+        
+        payload = {
+            "query": query,
+            "history": history,
+            "temperature": self.config.temperature,
+            "max_length": self.config.max_tokens
+        }
+        
+        try:
+            response = await self.client.post(url, json=payload)
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPError as e:
+            raise AIAnnotationError(f"ChatGLM API request failed: {str(e)}", "chatglm")
     
     def _prepare_annotation_messages(self, content: str, project_id: str) -> List[Dict[str, str]]:
         """Prepare chat messages for annotation task."""
@@ -176,8 +163,8 @@ class HunyuanAnnotator(AIAnnotator):
 """
         
         return [
-            {"Role": "system", "Content": system_prompt},
-            {"Role": "user", "Content": user_prompt}
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
         ]
     
     def _get_system_prompt(self, project_id: str) -> str:
@@ -198,15 +185,28 @@ class HunyuanAnnotator(AIAnnotator):
             return """你是一个专业的文本标注专家。请对文本进行综合分析，返回JSON格式：
 {"sentiment": "情感倾向", "entities": [], "categories": [], "confidence": 0.0-1.0, "summary": "分析摘要"}"""
     
-    def _parse_hunyuan_response(self, response: Dict[str, Any]) -> tuple[Dict[str, Any], float]:
-        """Parse Hunyuan response and extract prediction data and confidence."""
+    def _parse_chatglm_response(self, response: Dict[str, Any]) -> tuple[Dict[str, Any], float]:
+        """Parse ChatGLM response and extract prediction data and confidence."""
         try:
-            choices = response.get('Choices', [])
-            if not choices:
-                return {"error": "No choices in response"}, 0.0
+            content = ""
             
-            message = choices[0].get('Message', {})
-            content = message.get('Content', '')
+            # Handle OpenAI-compatible format
+            if "choices" in response:
+                choices = response.get("choices", [])
+                if choices:
+                    message = choices[0].get("message", {})
+                    content = message.get("content", "")
+            
+            # Handle ChatGLM-specific format
+            elif "response" in response:
+                content = response.get("response", "")
+            
+            # Handle direct text response
+            elif isinstance(response, str):
+                content = response
+            
+            if not content:
+                return {"error": "No content in response"}, 0.0
             
             # Try to extract JSON from response
             content = content.strip()
@@ -220,14 +220,14 @@ class HunyuanAnnotator(AIAnnotator):
                 prediction_data = json.loads(content)
                 
                 # Extract confidence from prediction or use default
-                confidence = prediction_data.get("confidence", 0.8)
+                confidence = prediction_data.get("confidence", 0.75)
                 confidence = max(0.0, min(1.0, float(confidence)))
                 
                 # Add metadata
                 prediction_data["model_response"] = {
-                    "usage": response.get("Usage", {}),
-                    "request_id": response.get("RequestId", ""),
-                    "finish_reason": choices[0].get("FinishReason", "")
+                    "usage": response.get("usage", {}),
+                    "model": self.config.model_name,
+                    "api_base": self.api_base
                 }
                 
                 return prediction_data, confidence
@@ -239,8 +239,8 @@ class HunyuanAnnotator(AIAnnotator):
                     "sentiment": "neutral",
                     "entities": [],
                     "categories": [],
-                    "model_response": response.get("Usage", {})
-                }, 0.6
+                    "model_response": {"model": self.config.model_name}
+                }, 0.5
                 
         except Exception as e:
             return {
@@ -249,43 +249,49 @@ class HunyuanAnnotator(AIAnnotator):
             }, 0.2
     
     def get_model_info(self) -> Dict[str, Any]:
-        """Get information about the Tencent Hunyuan model."""
+        """Get information about the ChatGLM model."""
         return {
-            "model_type": "tencent_hunyuan",
+            "model_type": "chatglm",
             "model_name": self.config.model_name,
-            "api_endpoint": self.endpoint,
-            "region": self.region,
+            "api_base": self.api_base,
             "max_tokens": self.config.max_tokens,
             "temperature": self.config.temperature,
             "timeout": self.config.timeout,
-            "has_api_key": bool(self.secret_id),
-            "capabilities": [
-                "text_classification",
-                "named_entity_recognition", 
-                "sentiment_analysis",
-                "text_generation"
-            ]
+            "has_api_key": bool(self.config.api_key),
+            "deployment_type": "local" if "localhost" in self.api_base else "remote"
         }
     
     async def list_available_models(self) -> List[str]:
-        """List available Tencent Hunyuan models."""
+        """List available ChatGLM models."""
         return [
-            "hunyuan-lite",
-            "hunyuan-standard",
-            "hunyuan-pro",
-            "hunyuan-turbo"
+            "chatglm3-6b",
+            "chatglm3-6b-32k",
+            "chatglm3-6b-base",
+            "chatglm2-6b",
+            "chatglm2-6b-32k",
+            "chatglm2-6b-base",
+            "chatglm-6b"
         ]
     
     async def check_model_availability(self) -> bool:
-        """Check if the API key is valid and model is accessible."""
+        """Check if the ChatGLM model is accessible."""
         try:
-            # Make a simple test request
+            # Try health check endpoint
+            health_url = f"{self.api_base}/health"
+            response = await self.client.get(health_url)
+            if response.status_code == 200:
+                return True
+        except Exception:
+            pass
+        
+        try:
+            # Try a simple test request
             test_messages = [
-                {"Role": "user", "Content": "测试"}
+                {"role": "user", "content": "测试"}
             ]
             
             response = await self._make_chat_completion_request(test_messages)
-            return "Choices" in response
+            return "error" not in str(response).lower()
             
         except Exception:
             return False

@@ -80,7 +80,8 @@ class AgentRequest(BaseModel):
         """Validate task type is supported."""
         allowed_types = {
             'classification', 'extraction', 'summarization', 
-            'question_answering', 'text_generation', 'analysis'
+            'question_answering', 'text_generation', 'analysis',
+            'conversation', 'chat'  # Added conversation types
         }
         if v not in allowed_types:
             raise ValueError(f'task_type must be one of {allowed_types}')
@@ -129,13 +130,61 @@ class RAGMetrics(BaseModel):
     avg_similarity_score: float = Field(..., description="Average similarity score")
     cache_hit_rate: float = Field(..., description="Cache hit rate percentage")
     
-    @field_validator('cache_hit_rate')
+    # Enhanced metrics for better evaluation
+    precision_at_k: float = Field(0.0, description="Precision at K metric")
+    recall_at_k: float = Field(0.0, description="Recall at K metric")
+    ndcg_score: float = Field(0.0, description="Normalized Discounted Cumulative Gain")
+    mrr_score: float = Field(0.0, description="Mean Reciprocal Rank")
+    
+    # Performance metrics
+    p95_response_time: float = Field(0.0, description="95th percentile response time")
+    p99_response_time: float = Field(0.0, description="99th percentile response time")
+    error_rate: float = Field(0.0, description="Error rate percentage")
+    
+    @field_validator('cache_hit_rate', 'precision_at_k', 'recall_at_k', 'ndcg_score', 'mrr_score', 'error_rate')
     @classmethod
-    def validate_cache_hit_rate(cls, v):
-        """Validate cache hit rate is between 0 and 100."""
+    def validate_percentage_fields(cls, v):
+        """Validate percentage fields are between 0 and 100."""
         if not 0.0 <= v <= 100.0:
-            raise ValueError('cache_hit_rate must be between 0.0 and 100.0')
+            raise ValueError('Percentage fields must be between 0.0 and 100.0')
         return v
+
+
+class RAGEvaluationRequest(BaseModel):
+    """Request model for RAG evaluation scenarios."""
+    
+    scenario_name: str = Field(..., description="Name of the evaluation scenario")
+    queries: List[str] = Field(..., description="List of test queries")
+    expected_documents: Optional[List[List[str]]] = Field(None, description="Expected relevant document IDs per query")
+    evaluation_metrics: List[str] = Field(
+        default=['precision', 'recall', 'ndcg', 'mrr'], 
+        description="Metrics to evaluate"
+    )
+    project_id: Optional[str] = Field(None, description="Project context for evaluation")
+    
+    @field_validator('evaluation_metrics')
+    @classmethod
+    def validate_metrics(cls, v):
+        """Validate evaluation metrics are supported."""
+        allowed_metrics = {'precision', 'recall', 'ndcg', 'mrr', 'map', 'f1'}
+        for metric in v:
+            if metric not in allowed_metrics:
+                raise ValueError(f'Unsupported metric: {metric}. Allowed: {allowed_metrics}')
+        return v
+
+
+class RAGEvaluationResult(BaseModel):
+    """Result model for RAG evaluation."""
+    
+    scenario_name: str = Field(..., description="Name of the evaluation scenario")
+    total_queries: int = Field(..., description="Total number of queries evaluated")
+    avg_precision: float = Field(..., description="Average precision across queries")
+    avg_recall: float = Field(..., description="Average recall across queries")
+    avg_ndcg: float = Field(..., description="Average NDCG across queries")
+    avg_mrr: float = Field(..., description="Average MRR across queries")
+    avg_response_time: float = Field(..., description="Average response time")
+    query_results: List[Dict[str, Any]] = Field(..., description="Per-query evaluation results")
+    overall_score: float = Field(..., description="Overall evaluation score")
 
 
 class AgentMetrics(BaseModel):

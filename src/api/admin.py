@@ -73,6 +73,13 @@ def get_admin_user():
 
 
 # System Management Endpoints
+@router.get("/enhanced", response_class=HTMLResponse)
+async def enhanced_admin_dashboard():
+    """Enhanced management console dashboard page."""
+    from src.admin.enhanced_dashboard_template import get_enhanced_dashboard_html
+    return HTMLResponse(content=get_enhanced_dashboard_html())
+
+
 @router.get("/", response_class=HTMLResponse)
 async def admin_dashboard():
     """管理员仪表板页面"""

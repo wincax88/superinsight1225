@@ -540,7 +540,11 @@ class TestRAGAgentInterfaceUnit:
         with patch('src.database.connection.db_manager.get_session') as mock_session:
             mock_db = Mock()
             mock_session.return_value.__enter__.return_value = mock_db
-            mock_db.query.return_value.filter.return_value.first.return_value = mock_doc
+            
+            # Mock the SQLAlchemy 2.0 style query execution
+            mock_result = Mock()
+            mock_result.scalar_one_or_none.return_value = mock_doc
+            mock_db.execute.return_value = mock_result
             
             chunks = self.rag_service.get_document_chunks(document_id, chunk_size=100, chunk_overlap=20)
         

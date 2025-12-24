@@ -113,10 +113,20 @@ class SecurityController:
         db: Session
     ) -> bool:
         """Check if a user has specific permission for a project."""
-        # Admin users have all permissions
+        # Validate inputs
+        if not user_id or not project_id or not project_id.strip():
+            return False
+        
+        # Get user first
         stmt = select(UserModel).where(UserModel.id == user_id)
         user = db.execute(stmt).scalar_one_or_none()
-        if user and user.role == UserRole.ADMIN:
+        
+        # User must exist and be active
+        if not user:
+            return False
+        
+        # Admin users have all permissions
+        if user.role == UserRole.ADMIN:
             return True
         
         # Check specific project permission

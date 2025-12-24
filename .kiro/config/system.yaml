@@ -1,0 +1,54 @@
+ai:
+  cache_enabled: true
+  cache_ttl: 3600
+  max_retries: 3
+  request_timeout: 60
+backup:
+  auto_backup_enabled: true
+  backup_interval_hours: 24
+  backup_location: ./backups
+  backup_retention_days: 7
+billing:
+  auto_calculation: true
+  currency: CNY
+  default_rate_per_annotation: 0.1
+  default_rate_per_hour: 50.0
+database:
+  echo_sql: false
+  pool_recycle: 3600
+  pool_size: 20
+  pool_timeout: 30
+extraction:
+  batch_size: 100
+  max_file_size_mb: 100
+  supported_formats:
+  - pdf
+  - docx
+  - txt
+  - html
+  timeout_seconds: 300
+monitoring:
+  alert_enabled: true
+  health_check_interval: 30
+  metrics_retention_days: 90
+  performance_sampling_rate: 0.1
+quality:
+  auto_check_enabled: true
+  max_issues_per_batch: 10
+  min_confidence_threshold: 0.7
+redis:
+  max_connections: 50
+  retry_on_timeout: true
+  socket_connect_timeout: 5
+  socket_timeout: 5
+security:
+  max_login_attempts: 5
+  password_min_length: 8
+  require_2fa: false
+  session_timeout_minutes: 60
+system:
+  api_rate_limit: 1000
+  debug_mode: false
+  log_retention_days: 30
+  maintenance_mode: false
+  max_concurrent_jobs: 10

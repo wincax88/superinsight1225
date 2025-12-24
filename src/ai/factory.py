@@ -12,6 +12,9 @@ from .ollama_annotator import OllamaAnnotator
 from .huggingface_annotator import HuggingFaceAnnotator
 from .zhipu_annotator import ZhipuAnnotator
 from .baidu_annotator import BaiduAnnotator
+from .alibaba_annotator import AlibabaAnnotator
+from .hunyuan_annotator import HunyuanAnnotator
+from .chatglm_annotator import ChatGLMAnnotator
 
 
 class AnnotatorFactory:
@@ -23,9 +26,15 @@ class AnnotatorFactory:
         ModelType.HUGGINGFACE: HuggingFaceAnnotator,
         ModelType.ZHIPU_GLM: ZhipuAnnotator,
         ModelType.BAIDU_WENXIN: BaiduAnnotator,
-        # TODO: Add Alibaba and Tencent annotators
-        # ModelType.ALIBABA_TONGYI: AlibabaAnnotator,
-        # ModelType.TENCENT_HUNYUAN: TencentAnnotator,
+        ModelType.ALIBABA_TONGYI: AlibabaAnnotator,
+        ModelType.TENCENT_HUNYUAN: HunyuanAnnotator,
+    }
+    
+    # Special registry for open source models that use generic types
+    _special_models: Dict[str, Type[AIAnnotator]] = {
+        "chatglm": ChatGLMAnnotator,
+        "chatglm3": ChatGLMAnnotator,
+        "chatglm2": ChatGLMAnnotator,
     }
     
     @classmethod
@@ -42,6 +51,18 @@ class AnnotatorFactory:
         Raises:
             AIAnnotationError: If the model type is not supported
         """
+        # Check for special models first (like ChatGLM)
+        for model_prefix, annotator_class in cls._special_models.items():
+            if model_prefix.lower() in config.model_name.lower():
+                try:
+                    return annotator_class(config)
+                except Exception as e:
+                    raise AIAnnotationError(
+                        f"Failed to create {model_prefix} annotator: {str(e)}",
+                        model_type=str(config.model_type)
+                    )
+        
+        # Use standard model type registry
         annotator_class = cls._annotators.get(config.model_type)
         
         if not annotator_class:

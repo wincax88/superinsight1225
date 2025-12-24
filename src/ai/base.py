@@ -42,6 +42,12 @@ class ModelConfig(BaseModel):
     temperature: float = Field(default=0.7, description="Temperature for generation")
     timeout: int = Field(default=30, description="Request timeout in seconds")
     
+    # Additional fields for specific providers
+    secret_key: Optional[str] = Field(None, description="Secret key for Tencent Cloud")
+    region: Optional[str] = Field(None, description="Region for cloud services")
+    
+    model_config = ConfigDict(extra='allow')  # Allow additional fields
+    
     @field_validator('temperature')
     @classmethod
     def validate_temperature(cls, v):
