@@ -1,66 +1,84 @@
 {
-  "envId": "superinsight-prod",
+  "envId": "${env.TCB_ENV_ID}",
+  "region": "ap-shanghai",
   "framework": {
     "name": "superinsight-platform",
     "plugins": {
-      "node": {
-        "use": "@cloudbase/framework-plugin-node",
+      "container": {
+        "use": "@cloudbase/framework-plugin-container",
         "inputs": {
-          "entry": "main.py",
-          "name": "superinsight-api",
-          "path": "/superinsight-api",
-          "runtime": "Python3.9",
-          "memorySize": 512,
-          "timeout": 60,
+          "serviceName": "superinsight-fullstack",
+          "servicePath": "/",
+          "description": "SuperInsight Full-Stack Container (FastAPI + Label Studio + PostgreSQL + Redis)",
+          "dockerfilePath": "./deploy/tcb/Dockerfile.fullstack",
+          "buildDir": ".",
+          "containerPort": 8000,
+          "cpu": 2,
+          "mem": 2048,
+          "minNum": 1,
+          "maxNum": 10,
+          "policyType": "cpu",
+          "policyThreshold": 70,
           "envVariables": {
-            "DATABASE_URL": "${env.DATABASE_URL}",
-            "LABEL_STUDIO_URL": "${env.LABEL_STUDIO_URL}",
-            "LABEL_STUDIO_TOKEN": "${env.LABEL_STUDIO_TOKEN}",
-            "REDIS_URL": "${env.REDIS_URL}",
+            "ENVIRONMENT": "${env.ENVIRONMENT}",
+            "DEBUG": "${env.DEBUG}",
+            "LOG_LEVEL": "${env.LOG_LEVEL}",
+            "POSTGRES_USER": "${env.POSTGRES_USER}",
+            "POSTGRES_PASSWORD": "${env.POSTGRES_PASSWORD}",
+            "POSTGRES_DB": "${env.POSTGRES_DB}",
+            "SECRET_KEY": "${env.SECRET_KEY}",
+            "JWT_SECRET_KEY": "${env.JWT_SECRET_KEY}",
             "HUNYUAN_API_KEY": "${env.HUNYUAN_API_KEY}",
             "HUNYUAN_SECRET_KEY": "${env.HUNYUAN_SECRET_KEY}",
             "COS_SECRET_ID": "${env.COS_SECRET_ID}",
             "COS_SECRET_KEY": "${env.COS_SECRET_KEY}",
             "COS_REGION": "${env.COS_REGION}",
             "COS_BUCKET": "${env.COS_BUCKET}"
-          }
-        }
-      },
-      "website": {
-        "use": "@cloudbase/framework-plugin-website",
-        "inputs": {
-          "buildCommand": "npm run build",
-          "outputPath": "dist",
-          "cloudPath": "/",
-          "ignore": [
-            ".git",
-            ".gitignore",
-            "node_modules",
-            ".serverless",
-            ".env*"
-          ]
-        }
-      },
-      "database": {
-        "use": "@cloudbase/framework-plugin-database",
-        "inputs": {
-          "commands": [
-            "npm run migrate"
-          ]
+          },
+          "volumeMounts": {
+            "/var/lib/postgresql/14/main": {
+              "name": "postgres-data",
+              "readOnly": false
+            },
+            "/var/lib/redis": {
+              "name": "redis-data",
+              "readOnly": false
+            },
+            "/app/label-studio-data": {
+              "name": "label-studio-data",
+              "readOnly": false
+            },
+            "/app/uploads": {
+              "name": "uploads",
+              "readOnly": false
+            },
+            "/app/logs": {
+              "name": "logs",
+              "readOnly": false
+            }
+          },
+          "customLogs": {
+            "enabled": true
+          },
+          "isPublic": true,
+          "flowRatio": 100,
+          "initialDelaySeconds": 60
         }
       }
     }
   },
-  "region": "ap-shanghai",
   "functionRoot": "./",
   "functions": [
     {
       "name": "data-extractor",
       "timeout": 300,
-      "envVariables": {},
-      "runtime": "Python3.9",
+      "runtime": "Python3.11",
       "memorySize": 1024,
       "handler": "src.extractors.api.main",
+      "envVariables": {
+        "DATABASE_URL": "${env.DATABASE_URL}",
+        "REDIS_URL": "${env.REDIS_URL}"
+      },
       "triggers": [
         {
           "name": "httpTrigger",
@@ -75,10 +93,15 @@
     {
       "name": "ai-annotator",
       "timeout": 600,
-      "envVariables": {},
-      "runtime": "Python3.9",
+      "runtime": "Python3.11",
       "memorySize": 2048,
       "handler": "src.ai.factory.main",
+      "envVariables": {
+        "DATABASE_URL": "${env.DATABASE_URL}",
+        "REDIS_URL": "${env.REDIS_URL}",
+        "HUNYUAN_API_KEY": "${env.HUNYUAN_API_KEY}",
+        "HUNYUAN_SECRET_KEY": "${env.HUNYUAN_SECRET_KEY}"
+      },
       "triggers": [
         {
           "name": "httpTrigger",
@@ -93,10 +116,13 @@
     {
       "name": "quality-manager",
       "timeout": 180,
-      "envVariables": {},
-      "runtime": "Python3.9",
+      "runtime": "Python3.11",
       "memorySize": 512,
       "handler": "src.quality.manager.main",
+      "envVariables": {
+        "DATABASE_URL": "${env.DATABASE_URL}",
+        "REDIS_URL": "${env.REDIS_URL}"
+      },
       "triggers": [
         {
           "name": "httpTrigger",

@@ -1,211 +1,402 @@
 #!/bin/bash
 
-# SuperInsight 腾讯云 TCB 部署脚本
+# SuperInsight TCB Full-Stack Deployment Script
+# Deploys a single container with PostgreSQL, Redis, Label Studio, and FastAPI
 
 set -e
 
-# 颜色输出
+# Script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+
+# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+BLUE='\033[0;34m'
+NC='\033[0m'
 
-# 日志函数
+# Image configuration
+REGISTRY="ccr.ccs.tencentyun.com"
+IMAGE_NAME="superinsight/fullstack"
+IMAGE_TAG="${IMAGE_TAG:-latest}"
+
+# Logging functions
 log_info() {
-    echo -e "${GREEN}[INFO]${NC} $1"
+    echo -e "${GREEN}[INFO]${NC} $(date '+%Y-%m-%d %H:%M:%S') $1"
 }
 
 log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
+    echo -e "${YELLOW}[WARN]${NC} $(date '+%Y-%m-%d %H:%M:%S') $1"
 }
 
 log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
+    echo -e "${RED}[ERROR]${NC} $(date '+%Y-%m-%d %H:%M:%S') $1"
 }
 
-# 检查必要的环境变量
+log_step() {
+    echo -e "${BLUE}[STEP]${NC} $(date '+%Y-%m-%d %H:%M:%S') $1"
+}
+
+# Print usage
+usage() {
+    cat << EOF
+Usage: $0 <command> [options]
+
+Commands:
+    deploy          Full deployment (build, push, deploy)
+    build           Build Docker image only
+    push            Push image to registry
+    deploy-only     Deploy without building (use existing image)
+    rollback        Rollback to previous version
+    health          Check service health
+    logs            View service logs
+    status          Show deployment status
+    backup          Backup data to COS
+    restore         Restore data from COS
+
+Options:
+    -e, --env       Environment (development|staging|production)
+    -t, --tag       Docker image tag
+    -h, --help      Show this help message
+
+Environment Variables:
+    TCB_ENV_ID          TCB environment ID (required)
+    TCB_SECRET_ID       TCB secret ID (required)
+    TCB_SECRET_KEY      TCB secret key (required)
+    POSTGRES_USER       PostgreSQL user (default: superinsight)
+    POSTGRES_PASSWORD   PostgreSQL password (required)
+    POSTGRES_DB         PostgreSQL database (default: superinsight)
+
+Examples:
+    $0 deploy -e production
+    $0 build -t v1.0.0
+    $0 rollback -e production
+EOF
+}
+
+# Check required environment variables
 check_env_vars() {
-    log_info "检查环境变量..."
-    
-    required_vars=(
+    log_step "Checking environment variables..."
+
+    local required_vars=(
         "TCB_ENV_ID"
-        "TCB_SECRET_ID" 
+        "TCB_SECRET_ID"
         "TCB_SECRET_KEY"
-        "DATABASE_URL"
-        "HUNYUAN_API_KEY"
-        "HUNYUAN_SECRET_KEY"
+        "POSTGRES_PASSWORD"
     )
-    
+
+    local missing=()
     for var in "${required_vars[@]}"; do
         if [ -z "${!var}" ]; then
-            log_error "环境变量 $var 未设置"
+            missing+=("$var")
+        fi
+    done
+
+    if [ ${#missing[@]} -gt 0 ]; then
+        log_error "Missing required environment variables: ${missing[*]}"
+        exit 1
+    fi
+
+    # Set defaults
+    export POSTGRES_USER="${POSTGRES_USER:-superinsight}"
+    export POSTGRES_DB="${POSTGRES_DB:-superinsight}"
+    export ENVIRONMENT="${ENVIRONMENT:-production}"
+
+    log_info "Environment variables verified"
+}
+
+# Check dependencies
+check_dependencies() {
+    log_step "Checking dependencies..."
+
+    local deps=("docker" "npm")
+    for dep in "${deps[@]}"; do
+        if ! command -v "$dep" &> /dev/null; then
+            log_error "$dep is not installed"
             exit 1
         fi
     done
-    
-    log_info "环境变量检查通过"
-}
 
-# 安装依赖
-install_dependencies() {
-    log_info "安装部署依赖..."
-    
-    # 检查是否安装了 cloudbase CLI
+    # Check CloudBase CLI
     if ! command -v tcb &> /dev/null; then
-        log_info "安装 CloudBase CLI..."
+        log_info "Installing CloudBase CLI..."
         npm install -g @cloudbase/cli
     fi
-    
-    # 检查是否安装了 Docker
-    if ! command -v docker &> /dev/null; then
-        log_error "Docker 未安装，请先安装 Docker"
-        exit 1
+
+    log_info "All dependencies available"
+}
+
+# Build fullstack Docker image
+build_image() {
+    log_step "Building fullstack Docker image..."
+
+    cd "$PROJECT_ROOT"
+
+    local full_image="${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+
+    docker build \
+        -t "${full_image}" \
+        -f deploy/tcb/Dockerfile.fullstack \
+        --build-arg BUILD_DATE="$(date -Iseconds)" \
+        --build-arg VCS_REF="$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')" \
+        .
+
+    # Also tag as latest if not already
+    if [ "$IMAGE_TAG" != "latest" ]; then
+        docker tag "${full_image}" "${REGISTRY}/${IMAGE_NAME}:latest"
     fi
-    
-    log_info "依赖安装完成"
+
+    log_info "Image built: ${full_image}"
 }
 
-# 构建 Docker 镜像
-build_docker_image() {
-    log_info "构建 Docker 镜像..."
-    
-    # 构建 API 服务镜像
-    docker build -t superinsight-api:latest -f deploy/tcb/Dockerfile.api .
-    
-    # 构建 Worker 服务镜像
-    docker build -t superinsight-worker:latest -f deploy/tcb/Dockerfile.worker .
-    
-    log_info "Docker 镜像构建完成"
+# Push image to Tencent Container Registry
+push_image() {
+    log_step "Pushing image to Tencent Container Registry..."
+
+    # Login to registry
+    echo "${TCB_SECRET_KEY}" | docker login "${REGISTRY}" -u "${TCB_SECRET_ID}" --password-stdin
+
+    local full_image="${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+
+    docker push "${full_image}"
+
+    if [ "$IMAGE_TAG" != "latest" ]; then
+        docker push "${REGISTRY}/${IMAGE_NAME}:latest"
+    fi
+
+    log_info "Image pushed: ${full_image}"
 }
 
-# 推送镜像到腾讯云容器镜像服务
-push_images() {
-    log_info "推送镜像到腾讯云容器镜像服务..."
-    
-    # 登录到腾讯云容器镜像服务
-    docker login ccr.ccs.tencentyun.com -u ${TCB_SECRET_ID} -p ${TCB_SECRET_KEY}
-    
-    # 标记镜像
-    docker tag superinsight-api:latest ccr.ccs.tencentyun.com/superinsight/api:latest
-    docker tag superinsight-worker:latest ccr.ccs.tencentyun.com/superinsight/worker:latest
-    
-    # 推送镜像
-    docker push ccr.ccs.tencentyun.com/superinsight/api:latest
-    docker push ccr.ccs.tencentyun.com/superinsight/worker:latest
-    
-    log_info "镜像推送完成"
-}
-
-# 部署数据库迁移
-deploy_database() {
-    log_info "执行数据库迁移..."
-    
-    # 运行数据库迁移
-    python -m alembic upgrade head
-    
-    log_info "数据库迁移完成"
-}
-
-# 部署云函数
-deploy_functions() {
-    log_info "部署云函数..."
-    
-    # 登录 CloudBase
-    tcb login --key-file deploy/tcb/tcb-key.json
-    
-    # 部署函数
-    tcb functions:deploy data-extractor --code-secret ${TCB_SECRET_ID}
-    tcb functions:deploy ai-annotator --code-secret ${TCB_SECRET_ID}
-    tcb functions:deploy quality-manager --code-secret ${TCB_SECRET_ID}
-    
-    log_info "云函数部署完成"
-}
-
-# 部署云托管服务
+# Deploy to CloudBase
 deploy_cloudbase() {
-    log_info "部署云托管服务..."
-    
-    # 使用 cloudbaserc.json 配置部署
-    tcb framework:deploy --envId ${TCB_ENV_ID}
-    
-    log_info "云托管服务部署完成"
-}
+    log_step "Deploying to CloudBase..."
 
-# 配置域名和 SSL
-configure_domain() {
-    log_info "配置自定义域名..."
-    
-    if [ -n "$CUSTOM_DOMAIN" ]; then
-        tcb hosting:domain:add ${CUSTOM_DOMAIN} --envId ${TCB_ENV_ID}
-        log_info "自定义域名配置完成: ${CUSTOM_DOMAIN}"
+    cd "$PROJECT_ROOT"
+
+    # Login to CloudBase
+    if [ -f "deploy/tcb/tcb-key.json" ]; then
+        tcb login --key-file deploy/tcb/tcb-key.json
     else
-        log_warn "未设置自定义域名，使用默认域名"
+        log_warn "No key file found, using environment credentials"
+        tcb login
     fi
+
+    # Deploy using cloudbaserc.json
+    tcb framework:deploy --envId "${TCB_ENV_ID}" --mode "${ENVIRONMENT}"
+
+    log_info "CloudBase deployment completed"
 }
 
-# 健康检查
+# Deploy cloud functions
+deploy_functions() {
+    log_step "Deploying cloud functions..."
+
+    tcb functions:deploy data-extractor --envId "${TCB_ENV_ID}"
+    tcb functions:deploy ai-annotator --envId "${TCB_ENV_ID}"
+    tcb functions:deploy quality-manager --envId "${TCB_ENV_ID}"
+
+    log_info "Cloud functions deployed"
+}
+
+# Health check
 health_check() {
-    log_info "执行健康检查..."
-    
-    # 获取部署的服务 URL
-    SERVICE_URL=$(tcb hosting:detail --envId ${TCB_ENV_ID} | grep -o 'https://[^"]*')
-    
-    if [ -n "$SERVICE_URL" ]; then
-        # 检查 API 健康状态
-        if curl -f "${SERVICE_URL}/health" > /dev/null 2>&1; then
-            log_info "健康检查通过: ${SERVICE_URL}"
-        else
-            log_error "健康检查失败: ${SERVICE_URL}"
-            exit 1
+    log_step "Performing health check..."
+
+    local max_attempts=10
+    local wait_time=15
+
+    # Get service URL
+    local service_url
+    service_url=$(tcb hosting:detail --envId "${TCB_ENV_ID}" 2>/dev/null | grep -o 'https://[^"]*' | head -1)
+
+    if [ -z "$service_url" ]; then
+        log_warn "Could not determine service URL"
+        return 1
+    fi
+
+    log_info "Checking health at: ${service_url}/health"
+
+    for ((i=1; i<=max_attempts; i++)); do
+        if curl -sf "${service_url}/health" -o /dev/null; then
+            log_info "Health check passed!"
+            echo "Service URL: ${service_url}"
+            return 0
         fi
-    else
-        log_warn "无法获取服务 URL，跳过健康检查"
-    fi
+        log_warn "Health check attempt $i/$max_attempts failed, waiting ${wait_time}s..."
+        sleep "$wait_time"
+    done
+
+    log_error "Health check failed after $max_attempts attempts"
+    return 1
 }
 
-# 清理临时文件
-cleanup() {
-    log_info "清理临时文件..."
-    
-    # 清理 Docker 镜像
-    docker rmi superinsight-api:latest superinsight-worker:latest || true
-    
-    log_info "清理完成"
-}
+# Rollback to previous version
+rollback() {
+    log_step "Rolling back to previous version..."
 
-# 主部署流程
-main() {
-    log_info "开始 SuperInsight TCB 部署..."
-    
-    # 检查环境
-    check_env_vars
-    install_dependencies
-    
-    # 构建和推送
-    build_docker_image
-    push_images
-    
-    # 部署服务
-    deploy_database
-    deploy_functions
-    deploy_cloudbase
-    
-    # 配置和检查
-    configure_domain
+    tcb framework:rollback --envId "${TCB_ENV_ID}"
+
+    log_info "Rollback initiated, verifying..."
+    sleep 30
     health_check
-    
-    # 清理
-    cleanup
-    
-    log_info "SuperInsight TCB 部署完成！"
-    
-    if [ -n "$SERVICE_URL" ]; then
-        log_info "服务访问地址: ${SERVICE_URL}"
-    fi
 }
 
-# 错误处理
-trap 'log_error "部署过程中发生错误，退出码: $?"' ERR
+# Show deployment status
+show_status() {
+    log_step "Checking deployment status..."
 
-# 执行主流程
-main "$@"
+    tcb hosting:detail --envId "${TCB_ENV_ID}"
+}
+
+# View logs
+view_logs() {
+    log_step "Fetching service logs..."
+
+    tcb logs:detail --envId "${TCB_ENV_ID}" --limit 100
+}
+
+# Backup data
+backup_data() {
+    log_step "Backing up data to COS..."
+
+    local backup_date
+    backup_date=$(date '+%Y%m%d_%H%M%S')
+
+    log_info "Backup functionality requires COS configuration"
+    log_warn "Please ensure COS_BUCKET and COS credentials are configured"
+
+    # This would typically:
+    # 1. Connect to the running container
+    # 2. Dump PostgreSQL database
+    # 3. Backup Redis data
+    # 4. Upload to COS
+
+    log_info "Backup placeholder - implement COS upload logic"
+}
+
+# Restore data
+restore_data() {
+    log_step "Restoring data from COS..."
+
+    log_info "Restore functionality requires COS configuration"
+    log_warn "Please specify backup file to restore"
+
+    # This would typically:
+    # 1. Download backup from COS
+    # 2. Restore PostgreSQL database
+    # 3. Restore Redis data
+
+    log_info "Restore placeholder - implement COS download logic"
+}
+
+# Full deployment
+full_deploy() {
+    log_info "Starting full deployment..."
+
+    check_env_vars
+    check_dependencies
+    build_image
+    push_image
+    deploy_cloudbase
+    deploy_functions
+
+    log_info "Waiting for service to start..."
+    sleep 60
+
+    health_check
+
+    log_info "Full deployment completed successfully!"
+}
+
+# Parse arguments
+COMMAND=""
+ENVIRONMENT="production"
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        deploy|build|push|deploy-only|rollback|health|logs|status|backup|restore)
+            COMMAND="$1"
+            shift
+            ;;
+        -e|--env)
+            ENVIRONMENT="$2"
+            shift 2
+            ;;
+        -t|--tag)
+            IMAGE_TAG="$2"
+            shift 2
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            log_error "Unknown option: $1"
+            usage
+            exit 1
+            ;;
+    esac
+done
+
+# Execute command
+case "$COMMAND" in
+    deploy)
+        full_deploy
+        ;;
+    build)
+        check_dependencies
+        build_image
+        ;;
+    push)
+        check_env_vars
+        check_dependencies
+        push_image
+        ;;
+    deploy-only)
+        check_env_vars
+        check_dependencies
+        deploy_cloudbase
+        deploy_functions
+        sleep 60
+        health_check
+        ;;
+    rollback)
+        check_env_vars
+        check_dependencies
+        rollback
+        ;;
+    health)
+        check_env_vars
+        check_dependencies
+        health_check
+        ;;
+    logs)
+        check_env_vars
+        check_dependencies
+        view_logs
+        ;;
+    status)
+        check_env_vars
+        check_dependencies
+        show_status
+        ;;
+    backup)
+        check_env_vars
+        backup_data
+        ;;
+    restore)
+        check_env_vars
+        restore_data
+        ;;
+    "")
+        log_error "No command specified"
+        usage
+        exit 1
+        ;;
+    *)
+        log_error "Unknown command: $COMMAND"
+        usage
+        exit 1
+        ;;
+esac

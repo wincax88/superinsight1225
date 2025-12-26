@@ -5,22 +5,34 @@ on:
     branches: [ main, develop ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to perform'
+        required: true
+        default: 'deploy'
+        type: choice
+        options:
+          - deploy
+          - rollback
 
 env:
   TCB_ENV_ID: ${{ secrets.TCB_ENV_ID }}
   TCB_SECRET_ID: ${{ secrets.TCB_SECRET_ID }}
   TCB_SECRET_KEY: ${{ secrets.TCB_SECRET_KEY }}
-  DATABASE_URL: ${{ secrets.DATABASE_URL }}
-  HUNYUAN_API_KEY: ${{ secrets.HUNYUAN_API_KEY }}
-  HUNYUAN_SECRET_KEY: ${{ secrets.HUNYUAN_SECRET_KEY }}
+  REGISTRY: ccr.ccs.tencentyun.com
+  IMAGE_NAME: superinsight/fullstack
 
 jobs:
+  # =============================================================================
+  # Test Job - Runs on all pushes and PRs
+  # =============================================================================
   test:
     runs-on: ubuntu-latest
-    
+
     services:
       postgres:
-        image: postgres:13
+        image: postgres:14
         env:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: test_superinsight
@@ -31,141 +43,293 @@ jobs:
           --health-retries 5
         ports:
           - 5432:5432
-    
+
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
     steps:
-    - uses: actions/checkout@v3
-    
+    - uses: actions/checkout@v4
+
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
-        python-version: '3.9'
-    
+        python-version: '3.11'
+
     - name: Cache pip dependencies
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/.cache/pip
         key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
         restore-keys: |
           ${{ runner.os }}-pip-
-    
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        pip install pytest pytest-cov
-    
+        pip install pytest pytest-cov pytest-asyncio
+
     - name: Run tests
       env:
         DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_superinsight
+        REDIS_URL: redis://localhost:6379/0
       run: |
-        pytest tests/ -v --cov=src --cov-report=xml
-    
+        pytest tests/ -v --cov=src --cov-report=xml --cov-report=html
+
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@v4
       with:
         file: ./coverage.xml
         flags: unittests
-        name: codecov-umbrella
+        name: codecov-superinsight
+        token: ${{ secrets.CODECOV_TOKEN }}
 
+  # =============================================================================
+  # Build and Deploy to Production
+  # =============================================================================
   build-and-deploy:
     needs: test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
     steps:
-    - uses: actions/checkout@v3
-    
+    - uses: actions/checkout@v4
+
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v2
-    
+      uses: docker/setup-buildx-action@v3
+
     - name: Login to Tencent Container Registry
-      uses: docker/login-action@v2
+      uses: docker/login-action@v3
       with:
-        registry: ccr.ccs.tencentyun.com
+        registry: ${{ env.REGISTRY }}
         username: ${{ secrets.TCB_SECRET_ID }}
         password: ${{ secrets.TCB_SECRET_KEY }}
-    
-    - name: Build and push API image
-      uses: docker/build-push-action@v4
+
+    - name: Extract metadata for Docker
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=sha,prefix=
+          type=raw,value=latest
+          type=raw,value=prod-${{ github.run_number }}
+
+    - name: Build and push fullstack image
+      uses: docker/build-push-action@v5
       with:
         context: .
-        file: ./deploy/tcb/Dockerfile.api
+        file: ./deploy/tcb/Dockerfile.fullstack
         push: true
-        tags: |
-          ccr.ccs.tencentyun.com/superinsight/api:latest
-          ccr.ccs.tencentyun.com/superinsight/api:${{ github.sha }}
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
-    
-    - name: Build and push Worker image
-      uses: docker/build-push-action@v4
+        build-args: |
+          BUILD_DATE=${{ github.event.head_commit.timestamp }}
+          VCS_REF=${{ github.sha }}
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
       with:
-        context: .
-        file: ./deploy/tcb/Dockerfile.worker
-        push: true
-        tags: |
-          ccr.ccs.tencentyun.com/superinsight/worker:latest
-          ccr.ccs.tencentyun.com/superinsight/worker:${{ github.sha }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
-    
+        node-version: '18'
+
     - name: Install CloudBase CLI
       run: |
         npm install -g @cloudbase/cli
-    
+
     - name: Deploy to CloudBase
+      env:
+        ENVIRONMENT: production
+        DEBUG: 'false'
+        LOG_LEVEL: WARNING
+        POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+        POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+        POSTGRES_DB: superinsight
+        SECRET_KEY: ${{ secrets.SECRET_KEY }}
+        JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
+        HUNYUAN_API_KEY: ${{ secrets.HUNYUAN_API_KEY }}
+        HUNYUAN_SECRET_KEY: ${{ secrets.HUNYUAN_SECRET_KEY }}
+        COS_SECRET_ID: ${{ secrets.COS_SECRET_ID }}
+        COS_SECRET_KEY: ${{ secrets.COS_SECRET_KEY }}
+        COS_REGION: ap-shanghai
+        COS_BUCKET: ${{ secrets.COS_BUCKET }}
       run: |
         echo '${{ secrets.TCB_KEY_FILE }}' > tcb-key.json
         tcb login --key-file tcb-key.json
-        tcb framework:deploy --envId ${{ env.TCB_ENV_ID }}
-    
-    - name: Run database migrations
-      run: |
-        python -m alembic upgrade head
-    
+        tcb framework:deploy --envId ${{ env.TCB_ENV_ID }} --mode production
+
     - name: Deploy cloud functions
       run: |
         tcb functions:deploy data-extractor --envId ${{ env.TCB_ENV_ID }}
         tcb functions:deploy ai-annotator --envId ${{ env.TCB_ENV_ID }}
         tcb functions:deploy quality-manager --envId ${{ env.TCB_ENV_ID }}
-    
+
     - name: Health check
       run: |
-        sleep 30  # 等待服务启动
+        echo "Waiting for service to start..."
+        sleep 60
+
+        # Get service URL
         SERVICE_URL=$(tcb hosting:detail --envId ${{ env.TCB_ENV_ID }} | grep -o 'https://[^"]*' | head -1)
+
         if [ -n "$SERVICE_URL" ]; then
-          curl -f "${SERVICE_URL}/health" || exit 1
-          echo "Health check passed: ${SERVICE_URL}"
+          echo "Checking health at ${SERVICE_URL}/health"
+
+          # Retry health check up to 5 times
+          for i in {1..5}; do
+            if curl -sf "${SERVICE_URL}/health" -o /dev/null; then
+              echo "Health check passed!"
+              exit 0
+            fi
+            echo "Health check attempt $i failed, retrying in 15s..."
+            sleep 15
+          done
+
+          echo "Health check failed after 5 attempts"
+          exit 1
         else
           echo "Could not get service URL"
           exit 1
         fi
-    
+
     - name: Notify deployment success
       if: success()
       run: |
-        echo "🎉 SuperInsight successfully deployed to TCB!"
-        echo "Environment: ${{ env.TCB_ENV_ID }}"
+        echo "=== Deployment Successful ==="
+        echo "Environment: production"
+        echo "Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
         echo "Commit: ${{ github.sha }}"
-    
+        echo "Deployed at: $(date -Iseconds)"
+
     - name: Notify deployment failure
       if: failure()
       run: |
-        echo "❌ SuperInsight deployment to TCB failed!"
+        echo "=== Deployment Failed ==="
+        echo "Environment: production"
+        echo "Commit: ${{ github.sha }}"
         echo "Please check the logs for details."
 
+  # =============================================================================
+  # Build and Deploy to Staging
+  # =============================================================================
   deploy-staging:
     needs: test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/develop'
-    
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+
     steps:
-    - uses: actions/checkout@v3
-    
+    - uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Login to Tencent Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ secrets.TCB_SECRET_ID }}
+        password: ${{ secrets.TCB_SECRET_KEY }}
+
+    - name: Build and push staging image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./deploy/tcb/Dockerfile.fullstack
+        push: true
+        tags: |
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:staging
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:staging-${{ github.sha }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Install CloudBase CLI
+      run: |
+        npm install -g @cloudbase/cli
+
     - name: Deploy to staging environment
       env:
         TCB_ENV_ID: ${{ secrets.TCB_STAGING_ENV_ID }}
+        ENVIRONMENT: staging
+        DEBUG: 'false'
+        LOG_LEVEL: INFO
+        POSTGRES_USER: ${{ secrets.STAGING_POSTGRES_USER }}
+        POSTGRES_PASSWORD: ${{ secrets.STAGING_POSTGRES_PASSWORD }}
+        POSTGRES_DB: superinsight_staging
       run: |
-        echo "Deploying to staging environment: $TCB_ENV_ID"
-        # 这里可以添加 staging 环境的部署逻辑
-        # 通常使用不同的环境 ID 和配置
+        echo '${{ secrets.TCB_KEY_FILE }}' > tcb-key.json
+        tcb login --key-file tcb-key.json
+        tcb framework:deploy --envId ${{ secrets.TCB_STAGING_ENV_ID }} --mode staging
+
+    - name: Health check staging
+      run: |
+        echo "Waiting for staging service to start..."
+        sleep 60
+
+        STAGING_URL=$(tcb hosting:detail --envId ${{ secrets.TCB_STAGING_ENV_ID }} | grep -o 'https://[^"]*' | head -1)
+
+        if [ -n "$STAGING_URL" ]; then
+          for i in {1..3}; do
+            if curl -sf "${STAGING_URL}/health" -o /dev/null; then
+              echo "Staging health check passed!"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Staging health check failed"
+          exit 1
+        fi
+
+    - name: Notify staging deployment
+      if: success()
+      run: |
+        echo "=== Staging Deployment Successful ==="
+        echo "Environment: staging"
+        echo "Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:staging-${{ github.sha }}"
+
+  # =============================================================================
+  # Rollback Job (Manual trigger)
+  # =============================================================================
+  rollback:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'rollback'
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Install CloudBase CLI
+      run: |
+        npm install -g @cloudbase/cli
+
+    - name: Rollback to previous version
+      run: |
+        echo '${{ secrets.TCB_KEY_FILE }}' > tcb-key.json
+        tcb login --key-file tcb-key.json
+
+        # Get previous version and rollback
+        echo "Rolling back to previous version..."
+        tcb framework:rollback --envId ${{ env.TCB_ENV_ID }}
+
+    - name: Verify rollback
+      run: |
+        sleep 30
+        SERVICE_URL=$(tcb hosting:detail --envId ${{ env.TCB_ENV_ID }} | grep -o 'https://[^"]*' | head -1)
+        curl -sf "${SERVICE_URL}/health" || exit 1
+        echo "Rollback verified successfully"

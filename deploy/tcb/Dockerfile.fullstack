@@ -1,0 +1,150 @@
+# SuperInsight TCB Full-Stack Dockerfile
+# Single container with PostgreSQL 14, Redis 7, Label Studio, and FastAPI
+# Managed by Supervisor
+
+# =============================================================================
+# Stage 1: Base image with system dependencies
+# =============================================================================
+FROM python:3.11-slim-bookworm AS base
+
+# Prevent interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # PostgreSQL 14
+    postgresql-14 \
+    postgresql-client-14 \
+    postgresql-contrib-14 \
+    # Redis
+    redis-server \
+    # Build dependencies
+    gcc \
+    g++ \
+    libpq-dev \
+    libffi-dev \
+    # Runtime dependencies
+    curl \
+    wget \
+    ca-certificates \
+    # Process manager
+    supervisor \
+    # Utilities
+    procps \
+    netcat-openbsd \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# =============================================================================
+# Stage 2: Python dependencies builder
+# =============================================================================
+FROM base AS builder
+
+WORKDIR /build
+
+# Copy requirements first for better caching
+COPY requirements.txt .
+
+# Create virtual environment and install dependencies
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Install Python dependencies
+RUN pip install --no-cache-dir --upgrade pip wheel setuptools && \
+    pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir label-studio==1.11.0
+
+# =============================================================================
+# Stage 3: Production image
+# =============================================================================
+FROM base AS production
+
+# Labels
+LABEL maintainer="SuperInsight Team"
+LABEL description="SuperInsight TCB Full-Stack Container"
+LABEL version="1.0.0"
+
+# Environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
+    PATH="/opt/venv/bin:$PATH" \
+    # PostgreSQL
+    PGDATA=/var/lib/postgresql/14/main \
+    POSTGRES_USER=superinsight \
+    POSTGRES_PASSWORD=superinsight_secret \
+    POSTGRES_DB=superinsight \
+    # Redis
+    REDIS_PORT=6379 \
+    # Application
+    APP_HOST=0.0.0.0 \
+    APP_PORT=8000 \
+    # Label Studio
+    LABEL_STUDIO_HOST=0.0.0.0 \
+    LABEL_STUDIO_PORT=8080 \
+    LABEL_STUDIO_LOCAL_FILES_SERVING_ENABLED=true \
+    LABEL_STUDIO_LOCAL_FILES_DOCUMENT_ROOT=/app/label-studio-data \
+    # Supervisor
+    SUPERVISOR_LOG_LEVEL=info
+
+# Copy virtual environment from builder
+COPY --from=builder /opt/venv /opt/venv
+
+# Create application user
+RUN groupadd -r -g 1000 superinsight && \
+    useradd -r -u 1000 -g superinsight -d /app -s /bin/bash superinsight
+
+# Create required directories
+RUN mkdir -p \
+    /app \
+    /app/uploads \
+    /app/logs \
+    /app/label-studio-data \
+    /var/lib/postgresql/14/main \
+    /var/lib/redis \
+    /var/log/supervisor \
+    /var/run/supervisor \
+    /run/postgresql \
+    /var/run/redis && \
+    chown -R superinsight:superinsight /app && \
+    chown -R postgres:postgres /var/lib/postgresql /run/postgresql && \
+    chown -R redis:redis /var/lib/redis /var/run/redis
+
+# Set working directory
+WORKDIR /app
+
+# Copy application code
+COPY --chown=superinsight:superinsight src/ ./src/
+COPY --chown=superinsight:superinsight main.py .
+COPY --chown=superinsight:superinsight alembic/ ./alembic/
+COPY --chown=superinsight:superinsight alembic.ini .
+
+# Copy Supervisor configuration
+COPY deploy/tcb/supervisor/supervisord.conf /etc/supervisor/supervisord.conf
+COPY deploy/tcb/supervisor/conf.d/ /etc/supervisor/conf.d/
+
+# Copy service configurations
+COPY deploy/tcb/config/postgres/postgresql.conf /etc/postgresql/14/main/postgresql.conf
+COPY deploy/tcb/config/postgres/pg_hba.conf /etc/postgresql/14/main/pg_hba.conf
+COPY deploy/tcb/config/redis/redis.conf /etc/redis/redis.conf
+
+# Copy initialization scripts
+COPY --chmod=755 deploy/tcb/scripts/ /app/scripts/
+
+# Set ownership for PostgreSQL config
+RUN chown postgres:postgres /etc/postgresql/14/main/*.conf
+
+# Expose ports
+# 8000: FastAPI
+# 8080: Label Studio
+EXPOSE 8000 8080
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD /app/scripts/health-check.sh || exit 1
+
+# Entrypoint
+ENTRYPOINT ["/app/scripts/entrypoint.sh"]
+
+# Default command
+CMD ["supervisord", "-c", "/etc/supervisor/supervisord.conf", "-n"]
