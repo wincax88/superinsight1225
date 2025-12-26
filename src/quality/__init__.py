@@ -29,6 +29,18 @@ def get_quality_report():
     from .manager import QualityReport
     return QualityReport
 
+def get_trend_analyzer():
+    """Get QualityTrendAnalyzer instance with lazy import."""
+    from .trend_analyzer import QualityTrendAnalyzer
+    return QualityTrendAnalyzer()
+
+
+def get_auto_retrain_trigger():
+    """Get AutoRetrainTrigger instance with lazy import."""
+    from .auto_retrain import AutoRetrainTrigger
+    return AutoRetrainTrigger()
+
+
 __all__ = [
     "DataRepairService",
     "RepairRecord",
@@ -38,5 +50,7 @@ __all__ = [
     "get_quality_manager",
     "get_quality_rule",
     "get_quality_rule_type",
-    "get_quality_report"
+    "get_quality_report",
+    "get_trend_analyzer",
+    "get_auto_retrain_trigger",
 ]

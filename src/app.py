@@ -534,7 +534,47 @@ async def include_optional_routers():
         logger.warning(f"Billing API not available: {e}")
     except Exception as e:
         logger.warning(f"Billing API failed to load: {e}")
-    
+
+    # Ticket management router
+    try:
+        from src.api.ticket_api import router as ticket_router
+        app.include_router(ticket_router)
+        logger.info("Ticket management API loaded successfully")
+    except ImportError as e:
+        logger.warning(f"Ticket management API not available: {e}")
+    except Exception as e:
+        logger.warning(f"Ticket management API failed to load: {e}")
+
+    # Performance evaluation router
+    try:
+        from src.api.evaluation_api import router as evaluation_router
+        app.include_router(evaluation_router)
+        logger.info("Performance evaluation API loaded successfully")
+    except ImportError as e:
+        logger.warning(f"Performance evaluation API not available: {e}")
+    except Exception as e:
+        logger.warning(f"Performance evaluation API failed to load: {e}")
+
+    # Quality analysis router (trends, auto-retrain, pricing, incentives)
+    try:
+        from src.api.quality_api import router as quality_analysis_router
+        app.include_router(quality_analysis_router)
+        logger.info("Quality analysis API loaded successfully")
+    except ImportError as e:
+        logger.warning(f"Quality analysis API not available: {e}")
+    except Exception as e:
+        logger.warning(f"Quality analysis API failed to load: {e}")
+
+    # Quality monitoring router (dashboard, alerts, anomalies)
+    try:
+        from src.api.monitoring_api import router as monitoring_router
+        app.include_router(monitoring_router)
+        logger.info("Quality monitoring API loaded successfully")
+    except ImportError as e:
+        logger.warning(f"Quality monitoring API not available: {e}")
+    except Exception as e:
+        logger.warning(f"Quality monitoring API failed to load: {e}")
+
     # Enhancement router
     try:
         from src.api.enhancement import router as enhancement_router
@@ -623,8 +663,12 @@ async def api_info():
         "endpoints": {
             "extraction": "/api/v1/extraction",
             "quality": "/api/quality",
+            "quality_analysis": "/api/v1/quality",
+            "monitoring": "/api/v1/monitoring",
             "ai_annotation": "/api/ai",
             "billing": "/api/billing",
+            "ticket": "/api/v1/tickets",
+            "evaluation": "/api/v1/evaluation",
             "enhancement": "/api/enhancement",
             "export": "/api/export",
             "rag_agent": "/api/rag",
@@ -659,7 +703,18 @@ async def api_info():
             "统一错误处理",
             "性能指标收集",
             "业务指标监控 (标注效率、用户活跃度、AI 性能)",
-            "实时业务分析与趋势预测"
+            "实时业务分析与趋势预测",
+            "智能工单派发 (技能匹配、负载均衡)",
+            "SLA 监控与告警",
+            "绩效考核与申诉",
+            "质量趋势分析与预测",
+            "自动重训练触发",
+            "质量驱动计费",
+            "激励与惩罚机制",
+            "实时质量监控仪表盘",
+            "异常检测与告警",
+            "培训需求分析",
+            "客户反馈收集与情感分析"
         ],
         "deployment_modes": [
             "腾讯云 TCB 云托管",
