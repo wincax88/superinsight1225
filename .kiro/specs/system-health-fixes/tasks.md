@@ -13,7 +13,7 @@ This implementation plan addresses the three failing health checks in the SuperI
   - Return proper health status format
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5_
 
-- [ ]* 1.2 Write unit tests for Label Studio health check
+- [x]* 1.2 Write unit tests for Label Studio health check
   - Test successful connection scenarios
   - Test failure and timeout scenarios
   - Mock Label Studio API responses
@@ -26,7 +26,7 @@ This implementation plan addresses the three failing health checks in the SuperI
   - Handle missing AI service configurations gracefully
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5_
 
-- [ ]* 2.2 Write unit tests for AI services health check
+- [x]* 2.2 Write unit tests for AI services health check
   - Test AI service availability checks
   - Test graceful handling of missing configurations
   - Mock AI provider API responses
@@ -39,7 +39,7 @@ This implementation plan addresses the three failing health checks in the SuperI
   - Verify database connectivity for authentication
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
 
-- [ ]* 3.2 Write unit tests for security health check
+- [x]* 3.2 Write unit tests for security health check
   - Test encryption and hashing functionality
   - Test JWT token operations
   - Test database connectivity scenarios
@@ -52,7 +52,7 @@ This implementation plan addresses the three failing health checks in the SuperI
   - Add configuration support for health check parameters
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5_
 
-- [ ]* 4.2 Write integration tests for health checker
+- [x]* 4.2 Write integration tests for health checker
   - Test overall health status aggregation
   - Test graceful degradation scenarios
   - Verify Kubernetes probe compatibility
