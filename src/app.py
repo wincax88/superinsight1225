@@ -595,6 +595,16 @@ async def include_optional_routers():
     except Exception as e:
         logger.warning(f"Business metrics API failed to load: {e}")
 
+    # Text-to-SQL router
+    try:
+        from src.api.text_to_sql import router as text_to_sql_router
+        app.include_router(text_to_sql_router)
+        logger.info("Text-to-SQL API loaded successfully")
+    except ImportError as e:
+        logger.warning(f"Text-to-SQL API not available: {e}")
+    except Exception as e:
+        logger.warning(f"Text-to-SQL API failed to load: {e}")
+
 
 # Include routers on startup
 @app.on_event("startup")
@@ -621,6 +631,7 @@ async def api_info():
             "security": "/api/security",
             "collaboration": "/api/collaboration",
             "business_metrics": "/api/business-metrics",
+            "text_to_sql": "/api/v1/text-to-sql",
             "health": "/health",
             "system_status": "/system/status",
             "metrics": "/system/metrics",
@@ -642,6 +653,7 @@ async def api_info():
             "数据增强与重构",
             "多格式数据导出",
             "RAG 和 Agent 测试接口",
+            "Text-to-SQL 自然语言查询",
             "安全控制与权限管理",
             "系统监控与健康检查",
             "统一错误处理",
