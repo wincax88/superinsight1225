@@ -5,8 +5,18 @@ export const API_ENDPOINTS = {
   AUTH: {
     LOGIN: '/api/security/login',
     LOGOUT: '/api/security/logout',
+    REGISTER: '/api/security/register',
     CURRENT_USER: '/api/security/users/me',
     REFRESH: '/api/security/refresh',
+  },
+
+  // Label Studio
+  LABEL_STUDIO: {
+    PROJECTS: '/api/label-studio/projects',
+    PROJECT_BY_ID: (id: string) => `/api/label-studio/projects/${id}`,
+    TASKS: (projectId: string) => `/api/label-studio/projects/${projectId}/tasks`,
+    ANNOTATIONS: (projectId: string, taskId: string) =>
+      `/api/label-studio/projects/${projectId}/tasks/${taskId}/annotations`,
   },
 
   // Users
@@ -42,6 +52,9 @@ export const API_ENDPOINTS = {
   QUALITY: {
     DASHBOARD: '/api/quality/dashboard/summary',
     RULES: '/api/quality/rules',
+    ISSUES: '/api/quality/issues',
+    RUN_ALL: '/api/quality/rules/run-all',
+    STATS: '/api/quality/stats',
   },
 
   // Security / Audit
@@ -50,6 +63,28 @@ export const API_ENDPOINTS = {
     AUDIT_SUMMARY: '/api/security/audit/summary',
     PERMISSIONS: '/api/security/permissions',
     IP_WHITELIST: '/api/security/ip-whitelist',
+    EVENTS: '/api/security/events',
+    EXPORT_LOGS: '/api/security/audit-logs/export',
+    BLOCKED_IPS: '/api/security/blocked-ips',
+    SESSIONS: '/api/security/sessions',
+    STATS: '/api/security/stats',
+  },
+
+  // Data Augmentation
+  AUGMENTATION: {
+    JOBS: '/api/augmentation/jobs',
+    SAMPLES: '/api/augmentation/samples',
+    UPLOAD: '/api/augmentation/upload',
+    STATS: '/api/augmentation/stats',
+  },
+
+  // Tasks
+  TASKS: {
+    BASE: '/api/tasks',
+    BY_ID: (id: string) => `/api/tasks/${id}`,
+    STATS: '/api/tasks/stats',
+    ASSIGN: (id: string) => `/api/tasks/${id}/assign`,
+    BATCH: '/api/tasks/batch',
   },
 
   // System

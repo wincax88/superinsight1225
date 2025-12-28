@@ -27,6 +27,12 @@ def get_incentive_manager():
     return IncentiveManager()
 
 
+def get_billing_report_service():
+    """Get BillingReportService instance with lazy import."""
+    from .report_service import get_billing_report_service as _get_service
+    return _get_service()
+
+
 __all__ = [
     'BillingRecord',
     'BillingRule',
@@ -37,4 +43,5 @@ __all__ = [
     'BillingAnalytics',
     'get_quality_pricing_engine',
     'get_incentive_manager',
+    'get_billing_report_service',
 ]

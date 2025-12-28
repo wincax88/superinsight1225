@@ -27,6 +27,15 @@ export const ROUTES = {
   ADMIN_TENANTS: '/admin/tenants',
   ADMIN_USERS: '/admin/users',
 
+  // Data Augmentation
+  AUGMENTATION: '/augmentation',
+
+  // Quality Management
+  QUALITY: '/quality',
+
+  // Security Audit
+  SECURITY: '/security',
+
   // Error pages
   NOT_FOUND: '/404',
   FORBIDDEN: '/403',

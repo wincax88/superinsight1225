@@ -420,12 +420,383 @@ async def get_optimization_recommendations(
 ) -> Dict[str, Any]:
     """
     Get cost optimization recommendations.
-    
+
     Provides actionable recommendations for cost reduction.
     """
     try:
         recommendations = billing_analytics.generate_cost_optimization_recommendations(tenant_id, days)
         return recommendations
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating recommendations: {str(e)}")
+
+
+# ============================================================================
+# Enhanced Report Service Endpoints
+# ============================================================================
+
+from src.billing.report_service import (
+    BillingReportService,
+    ReportType,
+    get_billing_report_service
+)
+from decimal import Decimal
+
+# Initialize enhanced report service
+report_service = get_billing_report_service()
+
+
+class EnhancedReportRequest(BaseModel):
+    """Request model for enhanced billing reports."""
+    tenant_id: str = Field(..., description="Tenant identifier")
+    start_date: date = Field(..., description="Report start date")
+    end_date: date = Field(..., description="Report end date")
+    report_type: str = Field(default="detailed", description="Report type")
+    user_names: Optional[Dict[str, str]] = Field(None, description="User name mappings")
+    project_names: Optional[Dict[str, str]] = Field(None, description="Project name mappings")
+    department_names: Optional[Dict[str, str]] = Field(None, description="Department name mappings")
+
+
+class BillingRuleVersionRequest(BaseModel):
+    """Request model for creating billing rule versions."""
+    tenant_id: str = Field(..., description="Tenant identifier")
+    billing_mode: BillingMode = Field(default=BillingMode.BY_COUNT, description="Billing mode")
+    rate_per_annotation: float = Field(default=0.10, description="Cost per annotation")
+    rate_per_hour: float = Field(default=50.00, description="Cost per hour")
+    project_annual_fee: float = Field(default=10000.00, description="Annual project fee")
+    created_by: str = Field(..., description="User creating the rule")
+
+
+class ApproveRuleRequest(BaseModel):
+    """Request model for approving billing rules."""
+    approved_by: str = Field(..., description="User approving the rule")
+
+
+class ProjectMappingRequest(BaseModel):
+    """Request model for configuring project mappings."""
+    tenant_id: str = Field(..., description="Tenant identifier")
+    mappings: Dict[str, str] = Field(..., description="Task ID to Project ID mappings")
+
+
+class DepartmentMappingRequest(BaseModel):
+    """Request model for configuring department mappings."""
+    tenant_id: str = Field(..., description="Tenant identifier")
+    project_mappings: Dict[str, str] = Field(..., description="Project ID to Department ID mappings")
+    user_mappings: Dict[str, str] = Field(..., description="User ID to Department ID mappings")
+
+
+@router.post("/enhanced-report")
+async def generate_enhanced_report(request: EnhancedReportRequest) -> Dict[str, Any]:
+    """
+    Generate enhanced billing report with advanced analytics.
+
+    Includes project breakdown, department allocation, and work hours statistics.
+    """
+    try:
+        report_type = ReportType(request.report_type) if request.report_type else ReportType.DETAILED
+
+        report = report_service.generate_enhanced_report(
+            tenant_id=request.tenant_id,
+            start_date=request.start_date,
+            end_date=request.end_date,
+            report_type=report_type,
+            user_names=request.user_names,
+            project_names=request.project_names,
+            department_names=request.department_names
+        )
+
+        return report.to_dict()
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating enhanced report: {str(e)}")
+
+
+@router.get("/work-hours/{tenant_id}")
+async def get_work_hours_statistics(
+    tenant_id: str,
+    start_date: date = Query(..., description="Report start date"),
+    end_date: date = Query(..., description="Report end date")
+) -> Dict[str, Any]:
+    """
+    Get work hours statistics for all users.
+
+    Provides detailed work hours breakdown per user with efficiency scores.
+    """
+    try:
+        statistics = report_service.generate_work_hours_report(
+            tenant_id=tenant_id,
+            start_date=start_date,
+            end_date=end_date
+        )
+
+        return {
+            "tenant_id": tenant_id,
+            "period": f"{start_date.isoformat()} to {end_date.isoformat()}",
+            "user_count": len(statistics),
+            "statistics": [
+                {
+                    "user_id": s.user_id,
+                    "user_name": s.user_name,
+                    "total_hours": s.total_hours,
+                    "billable_hours": s.billable_hours,
+                    "total_annotations": s.total_annotations,
+                    "annotations_per_hour": s.annotations_per_hour,
+                    "total_cost": float(s.total_cost),
+                    "efficiency_score": s.efficiency_score
+                }
+                for s in statistics
+            ]
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting work hours statistics: {str(e)}")
+
+
+@router.get("/project-breakdown/{tenant_id}")
+async def get_project_cost_breakdown(
+    tenant_id: str,
+    start_date: date = Query(..., description="Report start date"),
+    end_date: date = Query(..., description="Report end date")
+) -> Dict[str, Any]:
+    """
+    Get cost breakdown by project.
+
+    Provides detailed cost allocation per project.
+    """
+    try:
+        breakdowns = report_service.generate_project_cost_breakdown(
+            tenant_id=tenant_id,
+            start_date=start_date,
+            end_date=end_date
+        )
+
+        total_cost = sum(float(b.total_cost) for b in breakdowns)
+
+        return {
+            "tenant_id": tenant_id,
+            "period": f"{start_date.isoformat()} to {end_date.isoformat()}",
+            "total_cost": total_cost,
+            "project_count": len(breakdowns),
+            "breakdowns": [
+                {
+                    "project_id": b.project_id,
+                    "project_name": b.project_name,
+                    "total_cost": float(b.total_cost),
+                    "total_annotations": b.total_annotations,
+                    "total_time_spent": b.total_time_spent,
+                    "user_count": b.user_count,
+                    "avg_cost_per_annotation": float(b.avg_cost_per_annotation),
+                    "percentage_of_total": b.percentage_of_total
+                }
+                for b in breakdowns
+            ]
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting project breakdown: {str(e)}")
+
+
+@router.get("/department-allocation/{tenant_id}")
+async def get_department_cost_allocation(
+    tenant_id: str,
+    start_date: date = Query(..., description="Report start date"),
+    end_date: date = Query(..., description="Report end date")
+) -> Dict[str, Any]:
+    """
+    Get cost allocation by department.
+
+    Provides cost distribution across departments.
+    """
+    try:
+        allocations = report_service.generate_department_cost_allocation(
+            tenant_id=tenant_id,
+            start_date=start_date,
+            end_date=end_date
+        )
+
+        total_cost = sum(float(a.total_cost) for a in allocations)
+
+        return {
+            "tenant_id": tenant_id,
+            "period": f"{start_date.isoformat()} to {end_date.isoformat()}",
+            "total_cost": total_cost,
+            "department_count": len(allocations),
+            "allocations": [
+                {
+                    "department_id": a.department_id,
+                    "department_name": a.department_name,
+                    "total_cost": float(a.total_cost),
+                    "projects": a.projects,
+                    "user_count": a.user_count,
+                    "percentage_of_total": a.percentage_of_total
+                }
+                for a in allocations
+            ]
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting department allocation: {str(e)}")
+
+
+@router.post("/rules/versions")
+async def create_billing_rule_version(request: BillingRuleVersionRequest) -> Dict[str, Any]:
+    """
+    Create a new versioned billing rule.
+
+    Creates a new version of billing rule with audit trail.
+    """
+    try:
+        rule = report_service.create_billing_rule_version(
+            tenant_id=request.tenant_id,
+            billing_mode=request.billing_mode,
+            rate_per_annotation=Decimal(str(request.rate_per_annotation)),
+            rate_per_hour=Decimal(str(request.rate_per_hour)),
+            created_by=request.created_by,
+            project_annual_fee=Decimal(str(request.project_annual_fee))
+        )
+
+        return {
+            "status": "success",
+            "message": f"Created billing rule version {rule.version}",
+            "rule": rule.to_dict()
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error creating billing rule version: {str(e)}")
+
+
+@router.post("/rules/versions/{tenant_id}/{version}/approve")
+async def approve_billing_rule_version(
+    tenant_id: str,
+    version: int,
+    request: ApproveRuleRequest
+) -> Dict[str, Any]:
+    """
+    Approve a billing rule version.
+
+    Approves a pending billing rule version.
+    """
+    try:
+        rule = report_service.approve_billing_rule(
+            tenant_id=tenant_id,
+            version=version,
+            approved_by=request.approved_by
+        )
+
+        if rule:
+            return {
+                "status": "success",
+                "message": f"Approved billing rule version {version}",
+                "rule": rule.to_dict()
+            }
+        else:
+            raise HTTPException(status_code=404, detail=f"Billing rule version {version} not found")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error approving billing rule: {str(e)}")
+
+
+@router.get("/rules/versions/{tenant_id}")
+async def get_billing_rule_history(tenant_id: str) -> Dict[str, Any]:
+    """
+    Get billing rule version history.
+
+    Returns all versions of billing rules for the tenant.
+    """
+    try:
+        versions = report_service.get_billing_rule_history(tenant_id)
+        active_rule = report_service.get_active_billing_rule(tenant_id)
+
+        return {
+            "tenant_id": tenant_id,
+            "active_version": active_rule.version if active_rule else None,
+            "version_count": len(versions),
+            "versions": [v.to_dict() for v in versions]
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting billing rule history: {str(e)}")
+
+
+@router.post("/mappings/projects")
+async def configure_project_mappings(request: ProjectMappingRequest) -> Dict[str, Any]:
+    """
+    Configure task-to-project mappings.
+
+    Sets up mappings for project-based cost breakdown.
+    """
+    try:
+        report_service.configure_project_mapping(
+            tenant_id=request.tenant_id,
+            mappings=request.mappings
+        )
+
+        return {
+            "status": "success",
+            "message": f"Configured {len(request.mappings)} project mappings",
+            "tenant_id": request.tenant_id
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error configuring project mappings: {str(e)}")
+
+
+@router.post("/mappings/departments")
+async def configure_department_mappings(request: DepartmentMappingRequest) -> Dict[str, Any]:
+    """
+    Configure department mappings.
+
+    Sets up mappings for department-based cost allocation.
+    """
+    try:
+        report_service.configure_department_mapping(
+            tenant_id=request.tenant_id,
+            project_mappings=request.project_mappings,
+            user_mappings=request.user_mappings
+        )
+
+        return {
+            "status": "success",
+            "message": "Configured department mappings",
+            "tenant_id": request.tenant_id
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error configuring department mappings: {str(e)}")
+
+
+@router.get("/export-excel/{tenant_id}")
+async def export_billing_to_excel(
+    tenant_id: str,
+    start_date: date = Query(..., description="Report start date"),
+    end_date: date = Query(..., description="Report end date"),
+    report_type: str = Query("detailed", description="Report type")
+) -> Dict[str, Any]:
+    """
+    Prepare billing data for Excel export.
+
+    Returns structured data ready for Excel file generation.
+    """
+    try:
+        rtype = ReportType(report_type) if report_type else ReportType.DETAILED
+
+        report = report_service.generate_enhanced_report(
+            tenant_id=tenant_id,
+            start_date=start_date,
+            end_date=end_date,
+            report_type=rtype
+        )
+
+        excel_data = report_service.export_to_excel_data(report)
+
+        return {
+            "tenant_id": tenant_id,
+            "period": f"{start_date.isoformat()} to {end_date.isoformat()}",
+            "sheets": excel_data,
+            "generated_at": datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error preparing Excel export: {str(e)}")

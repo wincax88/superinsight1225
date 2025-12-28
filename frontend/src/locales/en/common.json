@@ -3,7 +3,10 @@
   "menu": {
     "dashboard": "Dashboard",
     "tasks": "Task Management",
+    "augmentation": "Data Augmentation",
+    "quality": "Quality Management",
     "billing": "Billing",
+    "security": "Security Audit",
     "settings": "Settings",
     "admin": "Admin Console"
   },

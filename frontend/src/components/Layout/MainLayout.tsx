@@ -7,6 +7,9 @@ import {
   DollarOutlined,
   SettingOutlined,
   SafetyOutlined,
+  ThunderboltOutlined,
+  SafetyCertificateOutlined,
+  AuditOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/stores/authStore';
@@ -26,9 +29,25 @@ const menuItems = [
     icon: <OrderedListOutlined />,
   },
   {
+    path: ROUTES.AUGMENTATION,
+    name: 'augmentation',
+    icon: <ThunderboltOutlined />,
+  },
+  {
+    path: ROUTES.QUALITY,
+    name: 'quality',
+    icon: <SafetyCertificateOutlined />,
+  },
+  {
     path: ROUTES.BILLING,
     name: 'billing',
     icon: <DollarOutlined />,
+  },
+  {
+    path: ROUTES.SECURITY,
+    name: 'security',
+    icon: <AuditOutlined />,
+    access: 'admin',
   },
   {
     path: ROUTES.SETTINGS,

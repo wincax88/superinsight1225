@@ -3,7 +3,10 @@
   "menu": {
     "dashboard": "仪表盘",
     "tasks": "任务管理",
+    "augmentation": "数据增强",
+    "quality": "质量管理",
     "billing": "账单管理",
+    "security": "安全审计",
     "settings": "系统设置",
     "admin": "管理控制台"
   },
