@@ -49,6 +49,26 @@ from .risk_assessment import (
     get_risk_engine, quick_risk_assessment
 )
 
+# Phase 6: Performance Optimization and Production Deployment
+from .performance import (
+    # Caching
+    InMemoryCache, ResponseCache, CacheStrategy, CacheEntry, CacheMetrics,
+    cached_response,
+    # Concurrent Processing
+    ConcurrentExecutor, TaskResult, ConcurrencyMode,
+    # Performance Monitoring
+    PerformanceMonitor, PerformanceMetric, LatencyStats, MetricType,
+    measure_latency,
+    # Health Check
+    HealthChecker, HealthStatus, ComponentHealth, SystemHealth,
+    # Service Discovery
+    ServiceRegistry, ServiceInstance, LoadBalancer, LoadBalanceStrategy,
+    # Global accessors
+    get_response_cache, get_performance_monitor, get_concurrent_executor,
+    get_health_checker, get_service_registry,
+    create_default_health_checks,
+)
+
 __all__ = [
     # Core Agent
     "AgentService",
@@ -133,4 +153,34 @@ __all__ = [
     "AlertLevel",
     "get_risk_engine",
     "quick_risk_assessment",
+
+    # Performance Optimization
+    "InMemoryCache",
+    "ResponseCache",
+    "CacheStrategy",
+    "CacheEntry",
+    "CacheMetrics",
+    "cached_response",
+    "ConcurrentExecutor",
+    "TaskResult",
+    "ConcurrencyMode",
+    "PerformanceMonitor",
+    "PerformanceMetric",
+    "LatencyStats",
+    "MetricType",
+    "measure_latency",
+    "HealthChecker",
+    "HealthStatus",
+    "ComponentHealth",
+    "SystemHealth",
+    "ServiceRegistry",
+    "ServiceInstance",
+    "LoadBalancer",
+    "LoadBalanceStrategy",
+    "get_response_cache",
+    "get_performance_monitor",
+    "get_concurrent_executor",
+    "get_health_checker",
+    "get_service_registry",
+    "create_default_health_checks",
 ]
