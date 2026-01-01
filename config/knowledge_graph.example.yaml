@@ -1,0 +1,435 @@
+# Knowledge Graph Configuration Example
+# Task 17: Configuration file examples for Knowledge Graph system
+
+# Copy this file to knowledge_graph.yaml and modify as needed
+
+# =============================================================================
+# Neo4j Database Configuration
+# =============================================================================
+database:
+  # Neo4j connection settings
+  neo4j:
+    uri: "bolt://localhost:7687"
+    username: "neo4j"
+    password: "your_password_here"
+    database: "neo4j"  # Database name (default: neo4j)
+
+    # Connection pool settings
+    pool:
+      max_size: 50
+      min_size: 5
+      acquire_timeout: 60  # seconds
+      max_lifetime: 3600   # seconds
+
+    # Query settings
+    query:
+      timeout: 30000  # milliseconds
+      max_transaction_retry_time: 30000  # milliseconds
+
+    # SSL/TLS settings (for production)
+    ssl:
+      enabled: false
+      verify: true
+      ca_cert_path: ""
+      client_cert_path: ""
+      client_key_path: ""
+
+# =============================================================================
+# NLP Processing Configuration
+# =============================================================================
+nlp:
+  # Entity extraction settings
+  entity_extraction:
+    enabled: true
+    model: "spacy"  # spacy, transformers, or custom
+    spacy_model: "en_core_web_lg"  # or zh_core_web_lg for Chinese
+
+    # Entity types to extract
+    entity_types:
+      - PERSON
+      - ORGANIZATION
+      - LOCATION
+      - EVENT
+      - PRODUCT
+      - TECHNOLOGY
+
+    # Confidence thresholds
+    thresholds:
+      min_confidence: 0.7
+      fuzzy_match_threshold: 0.85
+
+    # Custom patterns (regex-based)
+    custom_patterns:
+      - name: "PRODUCT_CODE"
+        pattern: "PRD-\\d{6}"
+      - name: "EMPLOYEE_ID"
+        pattern: "EMP\\d{5}"
+
+  # Relation extraction settings
+  relation_extraction:
+    enabled: true
+    model: "pattern"  # pattern, transformer, or hybrid
+
+    # Relation types
+    relation_types:
+      - WORKS_FOR
+      - LOCATED_IN
+      - PART_OF
+      - RELATED_TO
+      - MANAGES
+      - REPORTS_TO
+
+    # Pattern matching
+    patterns:
+      - type: "WORKS_FOR"
+        pattern: "{PERSON} works at {ORGANIZATION}"
+      - type: "LOCATED_IN"
+        pattern: "{ENTITY} is located in {LOCATION}"
+      - type: "MANAGES"
+        pattern: "{PERSON} manages {PERSON|ORGANIZATION}"
+
+  # Text preprocessing
+  preprocessing:
+    lowercase: false
+    remove_stopwords: false
+    lemmatize: true
+    max_length: 10000  # characters
+    languages:
+      - en
+      - zh
+
+# =============================================================================
+# Query Engine Configuration
+# =============================================================================
+query:
+  # Natural language query settings
+  natural_language:
+    enabled: true
+    model: "rule_based"  # rule_based, transformer, or hybrid
+
+    # Intent recognition
+    intents:
+      - FIND_ENTITY
+      - FIND_RELATION
+      - FIND_PATH
+      - AGGREGATE
+      - COMPARE
+
+    # Query templates
+    templates:
+      find_entity: "MATCH (n:{type}) WHERE n.name CONTAINS $query RETURN n LIMIT $limit"
+      find_relations: "MATCH (n)-[r]->(m) WHERE n.id = $entity_id RETURN r, m"
+      find_path: "MATCH path = shortestPath((a)-[*..{max_depth}]-(b)) WHERE a.id = $source AND b.id = $target RETURN path"
+
+  # Cypher query settings
+  cypher:
+    allow_write: false  # Only allow read queries via API
+    max_results: 1000
+    timeout: 30000  # milliseconds
+
+    # Query optimization
+    optimization:
+      use_indexes: true
+      parallel_execution: true
+      result_streaming: true
+
+  # Caching settings
+  cache:
+    enabled: true
+    strategy: "LRU"  # LRU, LFU, TTL, FIFO
+    max_size: 10000
+    ttl: 3600  # seconds
+
+    # Cache key prefix
+    prefix: "kg_query"
+
+# =============================================================================
+# Reasoning Engine Configuration
+# =============================================================================
+reasoning:
+  # Rule-based reasoning
+  rules:
+    enabled: true
+    max_inference_depth: 5
+
+    # Built-in rules
+    transitivity:
+      - relation: "PART_OF"
+        enabled: true
+      - relation: "LOCATED_IN"
+        enabled: true
+
+    symmetry:
+      - relation: "SIMILAR_TO"
+        enabled: true
+      - relation: "COLLABORATES_WITH"
+        enabled: true
+
+    inheritance:
+      - relation: "SUBCLASS_OF"
+        enabled: true
+
+  # ML-based inference
+  ml_inference:
+    enabled: true
+    model: "TransE"  # TransE, DistMult, ComplEx
+    embedding_dim: 128
+
+    # Training settings
+    training:
+      epochs: 100
+      batch_size: 256
+      learning_rate: 0.001
+      negative_samples: 5
+
+    # Prediction thresholds
+    link_prediction:
+      min_confidence: 0.8
+      max_candidates: 100
+
+# =============================================================================
+# Graph Algorithms Configuration
+# =============================================================================
+algorithms:
+  # Centrality algorithms
+  centrality:
+    page_rank:
+      damping_factor: 0.85
+      max_iterations: 100
+      tolerance: 1e-6
+
+    betweenness:
+      normalized: true
+      sample_size: null  # null for exact, number for approximation
+
+    eigenvector:
+      max_iterations: 100
+      tolerance: 1e-6
+
+  # Community detection
+  community:
+    louvain:
+      resolution: 1.0
+      randomize: true
+      seed: null
+
+    label_propagation:
+      max_iterations: 100
+
+  # Graph embeddings
+  embedding:
+    node2vec:
+      dimensions: 128
+      walk_length: 80
+      num_walks: 10
+      p: 1.0  # Return parameter
+      q: 1.0  # In-out parameter
+      workers: 4
+
+# =============================================================================
+# Visualization Configuration
+# =============================================================================
+visualization:
+  # Default layout
+  default_layout: "force_directed"  # force_directed, hierarchical, circular, grid
+
+  # Layout parameters
+  layouts:
+    force_directed:
+      iterations: 500
+      repulsion: 100
+      attraction: 0.1
+      gravity: 0.05
+
+    hierarchical:
+      direction: "TB"  # TB, BT, LR, RL
+      level_separation: 100
+      node_separation: 50
+
+    circular:
+      radius: 300
+      start_angle: 0
+
+  # Node styling
+  nodes:
+    default_size: 30
+    size_by_degree: true
+    max_size: 100
+
+    # Colors by type
+    colors:
+      PERSON: "#4CAF50"
+      ORGANIZATION: "#2196F3"
+      LOCATION: "#FF9800"
+      EVENT: "#9C27B0"
+      PRODUCT: "#00BCD4"
+      DEFAULT: "#757575"
+
+  # Edge styling
+  edges:
+    width: 2
+    curved: true
+    arrows: true
+
+  # Export settings
+  export:
+    formats:
+      - json
+      - cytoscape
+      - d3
+      - svg
+    max_nodes: 5000
+    max_edges: 10000
+
+# =============================================================================
+# API Configuration
+# =============================================================================
+api:
+  # Rate limiting
+  rate_limit:
+    enabled: true
+    requests_per_minute: 1000
+    burst_size: 100
+
+    # Per-endpoint limits
+    endpoints:
+      "/extract": 100  # NLP extraction is expensive
+      "/query/cypher": 50
+      "/bulk/*": 50
+
+  # Pagination
+  pagination:
+    default_limit: 100
+    max_limit: 1000
+
+  # Response settings
+  response:
+    include_metadata: true
+    include_statistics: false
+    format: "json"  # json, msgpack
+
+# =============================================================================
+# Monitoring Configuration
+# =============================================================================
+monitoring:
+  # Metrics collection
+  metrics:
+    enabled: true
+    prefix: "knowledge_graph"
+
+    # Prometheus endpoint
+    prometheus:
+      enabled: true
+      port: 9090
+      path: "/metrics"
+
+  # Health checks
+  health:
+    enabled: true
+    interval: 30  # seconds
+    timeout: 10   # seconds
+
+    # Components to check
+    components:
+      - database
+      - cache
+      - nlp_models
+
+  # Logging
+  logging:
+    level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+    format: "json"
+
+    # Log destinations
+    handlers:
+      console: true
+      file:
+        enabled: true
+        path: "/var/log/knowledge_graph/kg.log"
+        max_size: "100MB"
+        backup_count: 10
+
+  # Performance tracking
+  performance:
+    enabled: true
+    slow_query_threshold: 1000  # milliseconds
+    sample_rate: 0.1  # 10% of queries
+
+# =============================================================================
+# Security Configuration
+# =============================================================================
+security:
+  # Authentication
+  authentication:
+    enabled: true
+    type: "jwt"  # jwt, api_key, oauth2
+
+    jwt:
+      secret_key: "${JWT_SECRET_KEY}"
+      algorithm: "HS256"
+      expiration: 3600  # seconds
+
+  # Authorization
+  authorization:
+    enabled: true
+
+    # Role-based access
+    roles:
+      admin:
+        - "*"
+      editor:
+        - "entities:*"
+        - "relations:*"
+        - "extract:*"
+      viewer:
+        - "entities:read"
+        - "relations:read"
+        - "query:*"
+
+  # Query restrictions
+  query_restrictions:
+    allow_cypher_write: false
+    max_query_complexity: 100
+    blocked_operations:
+      - DELETE
+      - DETACH DELETE
+      - DROP
+      - CREATE CONSTRAINT
+      - DROP CONSTRAINT
+
+# =============================================================================
+# Performance Tuning
+# =============================================================================
+performance:
+  # Batch processing
+  batch:
+    enabled: true
+    size: 1000
+    flush_interval: 5  # seconds
+
+  # Connection pooling
+  connection_pool:
+    enabled: true
+    max_connections: 100
+    idle_timeout: 300  # seconds
+
+  # Async processing
+  async:
+    enabled: true
+    max_workers: 10
+    queue_size: 10000
+
+# =============================================================================
+# Feature Flags
+# =============================================================================
+features:
+  # Experimental features
+  experimental:
+    graphql_api: false
+    websocket_updates: false
+    ml_link_prediction: true
+
+  # Beta features
+  beta:
+    natural_language_query: true
+    auto_schema_discovery: false

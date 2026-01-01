@@ -52,10 +52,11 @@
   - Add configuration support for health check parameters
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5_
 
-- [ ] 4.2 Write integration tests for health checker
-  - Test overall health status aggregation
-  - Test graceful degradation scenarios
-  - Verify Kubernetes probe compatibility
+- [x] 4.2 Write integration tests for health checker ✅ **已完成**
+  - ✅ Test overall health status aggregation
+  - ✅ Test graceful degradation scenarios
+  - ✅ Verify Kubernetes probe compatibility
+  - ✅ 创建 tests/test_health_check_integration.py
   - _Requirements: 4.1, 4.2, 5.4, 5.5_
 
 - [x] 5. Add Configuration Support
